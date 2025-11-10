@@ -66,7 +66,7 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap):
     df = df.copy()
 
     # Ensure expected columns exist
-    required_cols = ["Gestion", "Potencial", " Reinversion_Hospitality", " Reinversión_Juego"]
+    required_cols = ["Gestion", "Potencial", "Reinversion_Hospitality", "Reinversión_Juego"]
     for c in required_cols:
         if c not in df.columns:
             st.error(f"Missing column in data: {c}")
