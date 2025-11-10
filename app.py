@@ -59,35 +59,6 @@ with tab_excel:
         st.dataframe(df_source)
 
 
-# -------- Option B: Load From SQL ------------------------------------------------
-
-with tab_sql:
-    st.write("Enter SQL credentials")
-
-    server = st.text_input("Server")
-    database = st.text_input("Database")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-
-    if st.button("Connect & Load"):
-        try:
-            conn_str = (
-                f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-                f"SERVER={server};"
-                f"DATABASE={database};"
-                f"UID={username};"
-                f"PWD={password};"
-            )
-            conn = pyodbc.connect(conn_str)
-            df_source = pd.read_sql("SELECT * FROM reinvestment_base;", conn)
-
-            st.success("✅ Data loaded from SQL")
-            st.dataframe(df_source)
-
-        except Exception as e:
-            st.error(f"SQL Error: {e}")
-
-
 # ---------------------------------------------------------
 # CALCULATION FUNCTION
 # ---------------------------------------------------------
