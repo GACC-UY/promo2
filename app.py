@@ -66,17 +66,17 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap):
     df = df.copy()
 
     # Ensure expected columns exist
-    required_cols = ["Unnamed: 10", "wallet"]
+    required_cols = ["Gestion", "Potencial"]
     for c in required_cols:
         if c not in df.columns:
             st.error(f"Missing column in data: {c}")
             return None
 
-    # Map % per Unnamed: 10
-    df["pct"] = df["Unnamed: 10"].map(pct_dict).fillna(0)
+    # Map % per Gestion
+    df["pct"] = df["Gestion"].map(pct_dict).fillna(0)
 
     # Base reinvestment
-    df["reinvestment"] = df["wallet"] * df["pct"]
+    df["reinvestment"] = df["Potencial"] * df["pct"]
 
     # Apply minimum per wallet
     df.loc[df["reinvestment"] < min_wallet, "reinvestment"] = min_wallet
