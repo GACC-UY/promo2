@@ -59,59 +59,30 @@ with tab_excel:
         st.success("✅ Excel loaded successfully")
         st.dataframe(df_source)
 
-
-
-def clean_column_name(col):
-    """
-    Normalize column names:
-    - Remove accents
-    - Replace spaces with _
-    - Remove illegal characters
-    - Strip leading/trailing spaces
-    """
-    if not isinstance(col, str):
-        col = str(col)
-
-    # Remove accents
-    col = "".join(
-        c for c in unicodedata.normalize('NFKD', col)
-        if not unicodedata.combining(c)
-    )
-
-    # Replace spaces with _
-    col = col.replace(" ", "_")
-
-    # Remove non-alphanumeric/underscore characters
-    col = re.sub(r"[^0-9a-zA-Z_]", "", col)
-
-    # Collapse repeated underscores
-    col = re.sub(r"_+", "_", col)
-
-    return col.strip("_")
-
+# ---------------------------------------------------------
+# excel clean up
+# ---------------------------------------------------------
 
 def fix_excel_headers(df):
     """
-    Detects the first row with >=3 non-null entries and uses it as the header.
-    Then normalizes all column names.
+    Detects the first row that contains ANY non-null values
+    and uses it as the header.
     """
-    # 1) Find header row
+    # Find first row with real headers
     for i, row in df.iterrows():
-        if row.notnull().sum() >= 3:  # customize if needed
+        if row.notnull().sum() >= 3:  # at least 3 non-empty cells → header row
             header_row = i
             break
 
-    # 2) Extract raw header values
-    raw_headers = df.iloc[header_row].astype(str).tolist()
+    # Extract headers
+    new_header = df.iloc[header_row].astype(str).tolist()
 
-    # 3) Normalize headers
-    cleaned_headers = [clean_column_name(h) for h in raw_headers]
-
-    # 4) Rebuild DataFrame
+    # Rebuild dataframe without that row
     df_fixed = df.iloc[header_row + 1:].reset_index(drop=True)
-    df_fixed.columns = cleaned_headers
+    df_fixed.columns = new_header
 
     return df_fixed
+
 # ---------------------------------------------------------
 # CALCULATION FUNCTION
 # ---------------------------------------------------------
