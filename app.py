@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from io import BytesIO
 import re
-import unicode
+import unicodedata
 
 # ---------------------------------------------------------
 # PAGE CONFIG
