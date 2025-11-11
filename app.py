@@ -88,8 +88,7 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap):
 
     # Required columns (normalized)
     required_cols = [
-        "Gestion",         # segment
-        "Potencial",       # wallet (base for %)
+        "Gestion",         # segment     # wallet (base for %)
         "NG",              # non-gestionable flag (1 = non gestionable)
         "Visitas",
         "TeoricoNeto",
