@@ -63,7 +63,7 @@ with tab_excel:
 # CALCULATION FUNCTION
 # ---------------------------------------------------------
 
- def apply_reinvestment(df, pct_dict, min_wallet, cap):
+def apply_reinvestment(df, pct_dict, min_wallet, cap):
     df = df.copy()
 
     # ---------------------------------------------------------
