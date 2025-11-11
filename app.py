@@ -206,14 +206,28 @@ if uploaded_file is not None:
         st.error(f"Error reading Excel file: {exc}")
         raw_df = None
 
-    if raw_df is not None:
-        df_fixed = fix_excel_headers(raw_df, min_nonnull_for_header=3)
-        df_fixed = fix_duplicate_columns(df_fixed)
-        df_source = df_fixed.copy()
-        st.success("✅ Excel loaded, headers fixed, columns normalized, duplicates removed")
-        with st.expander("Preview cleaned columns"):
-            st.write(list(df_source.columns))
-        st.dataframe(df_source.head(200), use_container_width=True)
+if raw_df is not None:
+
+    # 1. Fix headers
+    df_fixed = fix_excel_headers(raw_df, min_nonnull_for_header=3)
+
+    # 2. Fix duplicate column names
+    df_fixed = fix_duplicate_columns(df_fixed)
+
+    # ✅ 3. Convert all object columns to strings (Arrow FIX)
+    for col in df_fixed.columns:
+        if df_fixed[col].dtype == "object":
+            df_fixed[col] = df_fixed[col].astype(str)
+
+    # 4. Assign cleaned dataframe to df_source
+    df_source = df_fixed.copy()
+
+    st.success("✅ Excel loaded, headers fixed, columns normalized, duplicates removed")
+    with st.expander("Preview cleaned columns"):
+        st.write(list(df_source.columns))
+
+    # ✅ Replace deprecated use_container_width
+    st.dataframe(df_source.head(200), width='stretch')
 
 # ---------------------------------------------------------
 # RUN CALCULATION / EXPORT
