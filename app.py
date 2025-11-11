@@ -47,13 +47,13 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap):
     # RENAME REAL INGESTION COLUMNS → INTERNAL NAMES
     # -----------------------------------------------------
     rename_map = {
-        "pot_xvisita": "WxV",
+        "Pot_xVisita": "WxV",
         "Prom_TeoNeto_Trip": "TeoricoNeto",
         "Prom_WinNeto_Trip": "WinTotalNeto",
         "Prom_Visita_Trip": "Visitas",
         "Pot_Trip": "Trip_Esperado",
         "Pot_Trip": "Pot_Trip",
-        "pot_xvisita": "Pot_Visita",
+        "Pot_xVisita": "Pot_Visita",
     }
 
     df = df.rename(columns=rename_map)
@@ -63,7 +63,7 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap):
         "Gestion", "NG", "Pais",
         "WxV", "TeoricoNeto", "WinTotalNeto",
         "Visitas", "Trip_Esperado",
-        "Pot_Trip", "Pot_Visita",
+        "Pot_Trip", "Pot_Visita", "Pot_xVisita",
         "Comps", "Promo2"
     ]
 
