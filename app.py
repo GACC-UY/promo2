@@ -303,13 +303,13 @@ else:
 
 
                 # Additional KPIs
-                st.subheader("Additional KPIs")
+                    st.subheader("Additional KPIs")
 
-                df_result["Reinv_pct_Teorico"] = np.where(
-                    df_result["TeoricoNeto"] > 0,
-                    df_result["reinvestment"] / df_result["TeoricoNeto"],
-                    0
-                )
+                    df_result["Reinv_pct_Teorico"] = np.where(
+                        df_result["TeoricoNeto"] > 0,
+                        df_result["reinvestment"] / df_result["TeoricoNeto"],
+                        0
+                    )
 
                 df_result["Reinv_pct_Actual"] = np.where(
                     df_result["WinTotalNeto"] > 0,
