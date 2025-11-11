@@ -238,24 +238,30 @@ else:
                 )
                 st.altair_chart(chart_pais)
 
-                # Reinvestment by Gestión
+                # Reinvestment per Gestión
                 st.subheader("Reinvestment by Gestión")
                 kpi_gestion = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
                 st.dataframe(kpi_gestion, width="stretch")
+
+                # Pie Chart — Reinvestment by Gestión
+                st.write("📊 Pie Chart — Reinvestment by Gestión")
 
                 chart_gestion = (
                     alt.Chart(kpi_gestion)
                     .mark_arc()
                     .encode(
-                        theta="reinvestment:Q",
-                        color="Gestion:N",
+                        theta=alt.Theta(field="reinvestment", type="quantitative"),
+                        color=alt.Color(field="Gestion", type="nominal"),
                         tooltip=["Gestion", "reinvestment"]
                     )
                     .properties(width=400, height=400)
                 )
-                st.altair_chart(chart_gestion)
 
-                # Additional KPIs
+                st.altair_chart(chart_gestion, use_container_width=False)
+
+# ---------------------------------------------------------
+# Additional KPIs
+# ---------------------------------------------------------
                 st.subheader("Additional KPIs")
 
                 df_result["Reinv_pct_Teorico"] = np.where(
@@ -271,17 +277,18 @@ else:
                 )
 
                 extra_kpis = {
-                    "Avg Reinv % over Teórico": df_result["Reinv_pct_Teorico"].mean(),
-                    "Avg Reinv % over Actual": df_result["Reinv_pct_Actual"].mean(),
-                    "Avg Reinv per Visit": (df_result["reinvestment"] / df_result["Visitas"].replace(0, np.nan)).mean(),
+                    "Avg Reinvestment % over Teórico": df_result["Reinv_pct_Teorico"].mean(),
+                    "Avg Reinvestment % over Actual": df_result["Reinv_pct_Actual"].mean(),
+                    "Avg Reinvestment per Visit": (df_result["reinvestment"] / df_result["Visitas"].replace(0, np.nan)).mean(),
                     "Eligibility Rate (%)": df_result["eligible"].mean() * 100,
-                    "Excluded Players": len(df_result) - df_result["eligible"].sum(),
+                    "Excluded Players (NG or >100%)": len(df_result) - df_result["eligible"].sum(),
                     "Average WxV": df_result["WxV"].mean(),
                     "Average Potencial": df_result["Potencial"].mean(),
                     "Average Trip Win": df_result["Trip_Esperado"].mean(),
                 }
 
                 st.json(extra_kpis)
+
 
             # ---------------------------------------------------------
             # EXPORT TO EXCEL
