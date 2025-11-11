@@ -149,17 +149,37 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap):
     # Expected Trips (3-day window): use Visitas if available otherwise Visitas_Est
     df["Trips_Calc"] = np.where(df["Visitas"] > 0, df["Visitas"] / 3.0, df["Visitas_Est"] / 3.0)
 
+    # ---------------------------------------------------------
+    # NEW ELIGIBILITY RULE:
+    # If reinvestment > WxV → NOT eligible
+    # ---------------------------------------------------------
+    df["WxV"] = pd.to_numeric(df["WxV"], errors="coerce").fillna(0)
+    over_100_mask = df["reinvestment"] > df["WxV"]
+
+    df.loc[over_100_mask, "eligible"] = False
+    df.loc[over_100_mask, "reinvestment"] = 0
+    df.loc[over_100_mask, "Rango_Reinv"] = "NO APLICA"
+
     # Reinvestment Range Classification vs WxV
     # Avoid division by zero / NaNs by ensuring WxV numeric
     df["WxV"] = pd.to_numeric(df["WxV"], errors="coerce").fillna(0.0)
 
+    # ---------------------------------------------------------
+    # Rango Reinversion (AFTER eligibility cleanup)
+    # ---------------------------------------------------------
     conditions = [
         df["reinvestment"] == 0,
         (df["WxV"] > 0) & (df["reinvestment"] <= df["WxV"] * 0.5),
         (df["WxV"] > 0) & (df["reinvestment"] <= df["WxV"]),
-        (df["WxV"] >= 0) & (df["reinvestment"] > df["WxV"]),
     ]
-    choices = ["NO APLICA", "<50%", "50-100%", ">100%"]
+    choices = [
+        "NO APLICA",
+        "<50%",
+        "50-100%",
+    ]
+
+    df["Rango_Reinv"] = np.select(conditions, choices, default="NO APLICA")
+
     df["Rango_Reinv"] = np.select(conditions, choices, default="-")
 
     # Round money columns for nicer output
