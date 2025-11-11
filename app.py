@@ -144,6 +144,7 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap):
     # If non-eligible, ensure reinvestment = 0 and range = NO APLICA
     df.loc[~eligible_mask, "reinvestment"] = 0.0
     df.loc[~eligible_mask, "Rango_Reinv"] = "NO APLICA"
+    df.loc[~eligible_mask, "Rango_Reinv"] = ">100%"
 
     # Expected Trips (3-day window): use Visitas if available otherwise Visitas_Est
     df["Trips_Calc"] = np.where(df["Visitas"] > 0, df["Visitas"] / 3.0, df["Visitas_Est"] / 3.0)
