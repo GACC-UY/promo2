@@ -103,6 +103,16 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap):
     if missing:
         st.error(f"Missing columns required for calculations: {missing}")
         return None
+# ---------------------------------------------------------
+# Calculate Potencial as the higher between TeoricoNeto and WinTotalNeto
+# ---------------------------------------------------------
+
+# Make sure columns are numeric
+    df["TeoricoNeto"] = pd.to_numeric(df["TeoricoNeto"], errors="coerce").fillna(0)
+    df["WinTotalNeto"] = pd.to_numeric(df["WinTotalNeto"], errors="coerce").fillna(0)
+
+# Potencial = max(theoretical, actual win)
+    df["Potencial"] = df[["TeoricoNeto", "WinTotalNeto"]].max(axis=1)
 
     # Ensure numeric columns are numeric (coerce errors -> NaN)
     numeric_cols = ["Potencial", "Visitas", "TeoricoNeto", "WinTotalNeto", "WxV", "Visitas_Est", "Trip_Esperado"]
