@@ -56,8 +56,9 @@ with tab_excel:
     uploaded_file = st.file_uploader("Upload Source Excel", type=["xlsx"])
 
     if uploaded_file is not None:
-        df_source = pd.read_excel(uploaded_file)
-        st.success("✅ Excel loaded successfully")
+        raw_df = pd.read_excel(uploaded_file, header=None)
+        df_source = fix_excel_headers(raw_df)
+        st.success("✅ Excel loaded, header fixed, columns normalized")
         st.dataframe(df_source)
 
 # ---------------------------------------------------------
