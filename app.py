@@ -262,21 +262,21 @@ else:
 # ---------------------------------------------------------
 # Additional KPIs
 # ---------------------------------------------------------
-                st.subheader("Additional KPIs")
+            st.subheader("Additional KPIs")
 
-                df_result["Reinv_pct_Teorico"] = np.where(
-                    df_result["TeoricoNeto"] > 0,
-                    df_result["reinvestment"] / df_result["TeoricoNeto"],
-                    0
-                )
+            df_result["Reinv_pct_Teorico"] = np.where(
+                df_result["TeoricoNeto"] > 0,
+                df_result["reinvestment"] / df_result["TeoricoNeto"],
+                0
+            )
 
-                df_result["Reinv_pct_Actual"] = np.where(
-                    df_result["WinTotalNeto"] > 0,
-                    df_result["reinvestment"] / df_result["WinTotalNeto"],
-                    0
-                )
+            df_result["Reinv_pct_Actual"] = np.where(
+                df_result["WinTotalNeto"] > 0,
+                df_result["reinvestment"] / df_result["WinTotalNeto"],
+                0
+            )
 
-                extra_kpis = {
+            extra_kpis = {
                     "Avg Reinvestment % over Teórico": df_result["Reinv_pct_Teorico"].mean(),
                     "Avg Reinvestment % over Actual": df_result["Reinv_pct_Actual"].mean(),
                     "Avg Reinvestment per Visit": (df_result["reinvestment"] / df_result["Visitas"].replace(0, np.nan)).mean(),
@@ -285,9 +285,9 @@ else:
                     "Average WxV": df_result["WxV"].mean(),
                     "Average Potencial": df_result["Potencial"].mean(),
                     "Average Trip Win": df_result["Trip_Esperado"].mean(),
-                }
+            }
 
-                st.json(extra_kpis)
+            st.json(extra_kpis)
 
 
             # ---------------------------------------------------------
