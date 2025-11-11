@@ -61,11 +61,11 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap):
     # Ensure required columns exist
     required = [
         "Gestion", "NG", "Pais",
-        "WxV", "TeoricoNeto", "WinTotalNeto",
-        "Visitas", "Trip_Esperado",
-        "Pot_Trip", "Pot_Visita", "Pot_xVisita",
+        "TeoricoNeto", "WinTotalNeto", "Visitas",
+        "Pot_Trip", "Pot_Visita",
         "Comps", "Promo2"
     ]
+
 
     missing = [c for c in required if c not in df.columns]
     if missing:
