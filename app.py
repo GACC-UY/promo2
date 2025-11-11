@@ -64,26 +64,57 @@ with tab_excel:
 # excel clean up
 # ---------------------------------------------------------
 
+def clean_column_name(col):
+    """
+    Normalize column names:
+    - Remove accents
+    - Replace spaces with _
+    - Remove illegal characters
+    - Strip leading/trailing spaces
+    """
+    if not isinstance(col, str):
+        col = str(col)
+
+    # Remove accents
+    col = "".join(
+        c for c in unicodedata.normalize('NFKD', col)
+        if not unicodedata.combining(c)
+    )
+
+    # Replace spaces with _
+    col = col.replace(" ", "_")
+
+    # Remove non-alphanumeric/underscore characters
+    col = re.sub(r"[^0-9a-zA-Z_]", "", col)
+
+    # Collapse repeated underscores
+    col = re.sub(r"_+", "_", col)
+
+    return col.strip("_")
+
+
 def fix_excel_headers(df):
     """
-    Detects the first row that contains ANY non-null values
-    and uses it as the header.
+    Detects the first row with >=3 non-null entries and uses it as the header.
+    Then normalizes all column names.
     """
-    # Find first row with real headers
+    # 1) Find header row
     for i, row in df.iterrows():
-        if row.notnull().sum() >= 3:  # at least 3 non-empty cells → header row
+        if row.notnull().sum() >= 3:  # customize if needed
             header_row = i
             break
 
-    # Extract headers
-    new_header = df.iloc[header_row].astype(str).tolist()
+    # 2) Extract raw header values
+    raw_headers = df.iloc[header_row].astype(str).tolist()
 
-    # Rebuild dataframe without that row
+    # 3) Normalize headers
+    cleaned_headers = [clean_column_name(h) for h in raw_headers]
+
+    # 4) Rebuild DataFrame
     df_fixed = df.iloc[header_row + 1:].reset_index(drop=True)
-    df_fixed.columns = new_header
+    df_fixed.columns = cleaned_headers
 
     return df_fixed
-
 # ---------------------------------------------------------
 # CALCULATION FUNCTION
 # ---------------------------------------------------------
