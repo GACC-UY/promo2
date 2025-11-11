@@ -62,28 +62,98 @@ with tab_excel:
 # ---------------------------------------------------------
 # CALCULATION FUNCTION
 # ---------------------------------------------------------
-def apply_reinvestment(df, pct_dict, min_wallet, cap):
+
+ def apply_reinvestment(df, pct_dict, min_wallet, cap):
     df = df.copy()
 
-    # Ensure expected columns exist
-    required_cols = ["Gestion", "Potencial", "Reinversion_Hospitality", "Reinversión_Juego"]
-    for c in required_cols:
-        if c not in df.columns:
-            st.error(f"Missing column in data: {c}")
-            return None
+    # ---------------------------------------------------------
+    # 1. Ensure required columns exist
+    # ---------------------------------------------------------
+    required_cols = [
+        "Gestion", "", "Reinversion_Hospitality", "Reinversión_Juego", 
+        "NG", "Visitas", "TeoricoNeto", "WinTotalNeto", "WxV",
+        "Visitas_Est", "Trip_Esperado"
+    ]
 
-    # Map % per Gestion
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        st.error(f"Missing columns: {missing}")
+        return None
+
+
+    # ---------------------------------------------------------
+    # 2. Eligibility (NG logic)
+    # ---------------------------------------------------------
+    df["eligible"] = (df["NG"] == 0)  # 1 = non gestionable
+
+    # Non-gestionable → no reinvestment
+    df.loc[df["eligible"] == False, "reinvestment"] = 0
+    df.loc[df["eligible"] == False, "Rango_Reinv"] = "NO APLICA"
+
+
+    # ---------------------------------------------------------
+    # 3. % per segment
+    # ---------------------------------------------------------
     df["pct"] = df["Gestion"].map(pct_dict).fillna(0)
 
-    # Base reinvestment
-    df["reinvestment"] = df["Reinversión_Juego"] + df["Reinversion_Hospitality"] / df["Potencial"]
 
-    # Apply minimum per wallet
-    df.loc[df["reinvestment"] < min_wallet, "reinvestment"] = min_wallet
+    # ---------------------------------------------------------
+    # 4. Base reinvestment for eligible players
+    # ---------------------------------------------------------
+    df.loc[df["eligible"], "reinvestment"] = (
+        df["Potencial"] * df["pct"]
+    )
 
-    # Apply global cap
-    df["reinvestment"] = df["reinvestment"].clip(upper=cap)
 
+    # ---------------------------------------------------------
+    # 5. Minimum per wallet
+    # ---------------------------------------------------------
+    df.loc[
+        (df["eligible"]) &
+        (df["reinvestment"] < min_wallet),
+        "reinvestment"
+    ] = min_wallet
+
+
+    # ---------------------------------------------------------
+    # 6. Maximum cap
+    # ---------------------------------------------------------
+    df.loc[df["eligible"], "reinvestment"] = (
+        df["reinvestment"].clip(upper=cap)
+    )
+
+
+    # ---------------------------------------------------------
+    # 7. Expected Trips (3-day window)
+    # ---------------------------------------------------------
+    df["Trips_Calc"] = np.where(
+        df["Visitas"] > 0,
+        df["Visitas"] / 3,
+        df["Visitas_Est"] / 3
+    )
+
+
+    # ---------------------------------------------------------
+    # 8. Reinvestment Range Classification
+    # ---------------------------------------------------------
+    conditions = [
+        df["reinvestment"] == 0,
+        df["reinvestment"] <= df["WxV"] * 0.5,
+        df["reinvestment"] <= df["WxV"],
+        df["reinvestment"] > df["WxV"],
+    ]
+
+    choices = [
+        "NO APLICA",
+        "<50%",
+        "50–100%",
+        ">100%"
+    ]
+
+    df["Rango_Reinv"] = np.select(conditions, choices, default="-")
+
+
+    # ---------------------------------------------------------
     return df
 
 
