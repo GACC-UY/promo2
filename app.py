@@ -4,6 +4,7 @@ import numpy as np
 from io import BytesIO
 import re
 import unicodedata
+import altair as alt
 
 # ---------------------------------------------------------
 # PAGE CONFIG
@@ -263,11 +264,43 @@ else:
                 st.subheader("Reinvestment by País")
                 kpi_pais = df_result.groupby("Pais")["reinvestment"].sum().reset_index()
                 st.dataframe(kpi_pais, width='stretch')
+                # Pie Chart for Reinvestment by País
+                st.write("📊 Pie Chart — Reinvestment by País")
+
+                chart_pais = (
+                    alt.Chart(kpi_pais)
+                    .mark_arc()
+                    .encode(
+                        theta=alt.Theta(field="reinvestment", type="quantitative"),
+                        color=alt.Color(field="Pais", type="nominal"),
+                        tooltip=["Pais", "reinvestment"]
+                    )
+                    .properties(width=400, height=400)
+                )
+
+                st.altair_chart(chart_pais, use_container_width=False)
+
 
                 # Reinvestment per Gestion
                 st.subheader("Reinvestment by Gestión")
                 kpi_gestion = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
                 st.dataframe(kpi_gestion, width='stretch')
+                # Pie Chart for Reinvestment by Gestión
+                st.write("📊 Pie Chart — Reinvestment by Gestión")
+
+                chart_gestion = (
+                alt.Chart(kpi_gestion)
+                .mark_arc()
+                .encode(
+                    theta=alt.Theta(field="reinvestment", type="quantitative"),
+                    color=alt.Color(field="Gestion", type="nominal"),
+                    tooltip=["Gestion", "reinvestment"]
+                )
+                .properties(width=400, height=400)
+            )
+
+            st.altair_chart(chart_gestion, use_container_width=False)
+
 
                 # Additional KPIs
                 st.subheader("Additional KPIs")
