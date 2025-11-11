@@ -5,7 +5,7 @@ import numpy as np
 from io import BytesIO
 import re
 import unicodedata
-import openpyxl
+
 # ---------------------------------------------------------
 # PAGE CONFIG
 # ---------------------------------------------------------
