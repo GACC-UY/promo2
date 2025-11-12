@@ -204,54 +204,54 @@ if uploaded:
             st.success("✅ Promotion Layout Created")
             st.dataframe(df_result, use_container_width=True)
 
-            # ---------------------------------------------------------
-            # SUMMARY KPIs (EXPANDED)
-            # ---------------------------------------------------------
-            with st.expander("📊 Summary KPIs"):
+# === KPI SUMMARY ===
+if not df_result.empty:
+    st.subheader("📊 KPI Summary")
 
-                total_reinv = df_result["reinvestment"].sum()
-                total_eligible = int(df_result["eligible"].sum())
+    # Clean and calculate core KPIs
+    total_reinvestment = df_result["Reinversion_Juego"].sum() if "Reinversion_Juego" in df_result else 0
+    avg_teo = df_result["Prom_TeoNeto_Trip"].mean() if "Prom_TeoNeto_Trip" in df_result else 0
+    avg_win = df_result["Prom_WinNeto_Trip"].mean() if "Prom_WinNeto_Trip" in df_result else 0
+    avg_trip = df_result["Pot_Trip"].mean() if "Pot_Trip" in df_result else 0
+    avg_visita = df_result["Prom_Visita_Trip"].mean() if "Prom_Visita_Trip" in df_result else 0
 
-                st.metric("Total Reinvestment (sum)", f"{total_reinv:,.2f}")
-                st.metric("Eligible Players", f"{total_eligible:,}")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col1.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
+    col2.metric("📈 Avg Theoretical Net (Trip)", f"{avg_teo:,.0f}")
+    col3.metric("🎯 Avg Win Net (Trip)", f"{avg_win:,.0f}")
+    col4.metric("🧳 Avg Pot Trip", f"{avg_trip:,.0f}")
+    col5.metric("👣 Avg Visits (Trip)", f"{avg_visita:,.2f}")
 
-                # Reinvestment per País
-                st.subheader("Reinvestment by País")
-                kpi_pais = df_result.groupby("Pais")["reinvestment"].sum().reset_index()
-                st.dataframe(kpi_pais, width='stretch')
+    # ==========================
+    # AGGREGATED KPIs by country and gestion
+    # ==========================
+    st.subheader("🌍 Reinvestment Breakdown")
 
-                # Reinvestment per Gestion
-                st.subheader("Reinvestment by Gestión")
-                kpi_gestion = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
-                st.dataframe(kpi_gestion, width='stretch')
+    if "Pais" in df_result.columns:
+        reinv_by_pais = df_result.groupby("Pais")["Reinversion_Juego"].sum().reset_index()
+        st.write(reinv_by_pais)
+        fig_pais = px.pie(reinv_by_pais, names="Pais", values="Reinversion_Juego",
+                          title="Reinvestment by Country", hole=0.4)
+        st.plotly_chart(fig_pais, use_container_width=True)
 
-                # Additional KPIs
-                st.subheader("Additional KPIs")
+    if "Gestion" in df_result.columns:
+        reinv_by_gestion = df_result.groupby("Gestion")["Reinversion_Juego"].sum().reset_index()
+        st.write(reinv_by_gestion)
+        fig_gestion = px.pie(reinv_by_gestion, names="Gestion", values="Reinversion_Juego",
+                             title="Reinvestment by Gestion", hole=0.4)
+        st.plotly_chart(fig_gestion, use_container_width=True)
 
-                df_result["Reinv_pct_Teorico"] = np.where(
-                    df_result["TeoricoNeto"] > 0,
-                    df_result["reinvestment"] / df_result["TeoricoNeto"],
-                    0
-                )
+    # ==========================
+    # Additional insights
+    # ==========================
+    st.subheader("📈 Additional KPIs")
+    df_result["Reinvestment_Rate"] = df_result["Reinversion_Juego"] / (df_result["Prom_TeoNeto_Trip"] + 1e-6)
+    avg_reinv_rate = df_result["Reinvestment_Rate"].mean() * 100
+    st.metric("Reinvestment Rate (%)", f"{avg_reinv_rate:.2f}%")
 
-                df_result["Reinv_pct_Actual"] = np.where(
-                    df_result["WinTotalNeto"] > 0,
-                    df_result["reinvestment"] / df_result["WinTotalNeto"],
-                    0
-                )
+else:
+    st.warning("No data available to calculate KPIs.")
 
-                extra_kpis = {
-                    "Avg Reinvestment % over Teórico": df_result["Reinv_pct_Teorico"].mean(),
-                    "Avg Reinvestment % over Actual": df_result["Reinv_pct_Actual"].mean(),
-                    "Avg Reinvestment per Visit": (df_result["reinvestment"] / df_result["Visitas"].replace(0, np.nan)).mean(),
-                    "Eligibility Rate (%)": df_result["eligible"].mean() * 100,
-                    "Excluded Players (NG or >100%)": len(df_result) - df_result["eligible"].sum(),
-                    "Average WxV": df_result["WxV"].mean(),
-                    "Average Potencial": df_result["Potencial"].mean(),
-                    "Average Trip Win": df_result["Trip_Esperado"].mean(),
-                }
-
-                st.json(extra_kpis)
 
             #############################
             # EXPORT
