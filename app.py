@@ -144,9 +144,31 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap):
     # 2. reinvestment <= Promo2
     df.loc[df["reinvestment"] <= df["Promo2"], ["eligible", "reinvestment"]] = [False, 0]
 
-    # 3. reinvestment > WxV
+# 3. reinvestment > WxV
     df.loc[df["reinvestment"] > df["WxV"], ["eligible", "reinvestment"]] = [False, 0]
 
+    ###########################################
+    # COUNTRY-SPECIFIC REINVESTMENT CAPS
+    ###########################################
+    caps = {
+        "URY_Local": {"min": 100, "max": 10000},
+        "URY_Resto": {"min": 50, "max": 8000},
+        "ARG": {"min": 200, "max": 12000},
+        "BRA": {"min": 150, "max": 10000},
+        "Otros": {"min": 75, "max": 7000},
+    }
+
+    def apply_caps(row):
+        pais = str(row.get("Pais", "")).strip()
+        reinv = row.get("reinvestment", 0)
+        for key, rule in caps.items():
+            if key.replace(" ", "_").upper() == pais.replace(" ", "_").upper():
+                reinv = max(reinv, rule["min"])
+                reinv = min(reinv, rule["max"])
+                break
+        return reinv
+
+    df["reinvestment"] = df.apply(apply_caps, axis=1)
     ###########################################
     # REINVESTMENT RANGE
     ###########################################
