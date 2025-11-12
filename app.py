@@ -90,7 +90,6 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
 
     # --- Calculate reinvestment raw ---
     df["reinvestment_raw"] = df["pot_used"] * df["pct"]
-    df["reinvestment"] = 0.0
 
     # --- Apply global min/cap ---
     elig = df["eligible"]
@@ -101,7 +100,7 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     # --- Ineligibility rules ---
     df.loc[df["Comps"] > 200, ["eligible", "reinvestment"]] = [False, 0]
     df.loc[df["reinvestment"] <= df["Promo2"], ["eligible", "reinvestment"]] = [False, 0]
-    df.loc[df["reinvestment"] > df["WxV"], ["eligible", "reinvestment"]] = [False, 0]
+  
 
     # --- Apply per-country min/max caps ---
     def apply_country_caps(row):
