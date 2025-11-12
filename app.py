@@ -185,6 +185,23 @@ if uploaded:
             st.subheader("📊 KPI Summary")
 
             eligible_df = df_result[df_result["eligible"]]
+            kpi_pais = eligible_df.groupby("Pais")["reinvestment"].sum().reset_index()
+            kpi_gestion = eligible_df.groupby("Gestion")["reinvestment"].sum().reset_index()
+
+            total_reinvestment = eligible_df["reinvestment"].sum()
+            avg_teo = eligible_df["TeoricoNeto"].sum()
+            avg_win = eligible_df["WinTotalNeto"].sum()
+            avg_trip = eligible_df["Pot_Trip"].sum()
+            avg_visita = eligible_df["Visitas"].mean()
+
+            c1, c2, c3, c4, c5 = st.columns(5)
+            c1.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
+            c2.metric("📈 Total Theoretical Net", f"{avg_teo:,.0f}")
+            c3.metric("🎯 Total Win Net", f"{avg_win:,.0f}")
+            c4.metric("🧳 Total Pot Trip", f"{avg_trip:,.0f}")
+            c5.metric("👣 Avg Visits", f"{avg_visita:,.2f}")
+
+            eligible_df = df_result[df_result["eligible"]]
             total_reinvestment = eligible_df["reinvestment"].sum()
             total_pot_visita = eligible_df["Pot_Visita"].sum()
             total_pot_trip = eligible_df["Pot_Trip"].sum()
