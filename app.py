@@ -1,6 +1,6 @@
 ###############################################
 # 🎰 CASINO REINVESTMENT PROMOTION BUILDER
-# ✅ FINAL STREAMLIT APP (per-country caps + % KPIs + % Pie Charts)
+# ✅ FINAL STREAMLIT APP (eligibility + country % + KPI % + pie charts)
 ###############################################
 
 import streamlit as st
@@ -50,7 +50,6 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     }
     df.rename(columns=rename_map, inplace=True)
 
-    # --- Validate required columns ---
     required_cols = ["Gestion", "Pais", "NG", "TeoricoNeto", "WinTotalNeto",
                      "Visitas", "Pot_Trip", "Pot_Visita", "Promo2", "Comps"]
     missing = [c for c in required_cols if c not in df.columns]
@@ -58,7 +57,6 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
         st.error(f"❌ Missing required columns: {missing}")
         return None
 
-    # --- Convert numerics safely ---
     num_cols = ["TeoricoNeto", "WinTotalNeto", "Visitas", "Pot_Trip",
                 "Pot_Visita", "Promo2", "Comps"]
     for c in num_cols:
@@ -91,12 +89,11 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
 
     df["reinvestment"] = df.apply(apply_country_caps, axis=1)
 
-    # --- Apply global limits ---
-    elig = df["eligible"]
-    df.loc[elig, "reinvestment"] = df.loc[elig, "reinvestment"].clip(lower=min_wallet, upper=cap)
-    df.loc[~elig, "reinvestment"] = 0
+    # --- Apply global limits only to eligible ---
+    df.loc[df["eligible"], "reinvestment"] = df.loc[df["eligible"], "reinvestment"].clip(lower=min_wallet, upper=cap)
+    df.loc[~df["eligible"], "reinvestment"] = 0
 
-    # --- Eligibility refinement ---
+    # --- Eligibility refinements ---
     df.loc[df["Comps"] > 200, ["eligible", "reinvestment"]] = [False, 0]
     df.loc[df["reinvestment"] <= df["Promo2"], ["eligible", "reinvestment"]] = [False, 0]
 
@@ -111,12 +108,11 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
         default="NO APLICA",
     )
 
-    # --- If NO APLICA => eligible = 0 ---
-    df.loc[df["Rango_Reinv"] == "NO APLICA", "eligible"] = False
+    # --- Final eligibility filter ---
+    df.loc[df["Rango_Reinv"] == "NO APLICA", ["eligible", "reinvestment"]] = [False, 0]
 
     df["reinvestment"] = df["reinvestment"].round(2)
     return df
-
 
 ###############################################
 # SIDEBAR CONFIG
@@ -141,7 +137,6 @@ for pais in ["URY Local", "URY Resto", "ARG", "BRA", "Otros"]:
 st.sidebar.subheader("Global Reinvestment Rules")
 min_wallet = st.sidebar.number_input("Minimum reinvestment", 0.0, value=100.0)
 cap_value = st.sidebar.number_input("Cap per wallet", 0.0, value=20000.0)
-
 
 ###############################################
 # FILE UPLOAD
@@ -168,39 +163,19 @@ if uploaded:
             st.dataframe(df_result, use_container_width=True)
 
             ###############################################
-            # KPIs — Improved Tables with %
+            # KPIs — Tables + % + Pie Charts
             ###############################################
             st.subheader("📊 KPI Summary")
 
             eligible_df = df_result[df_result["eligible"]]
-            kpi_pais = eligible_df.groupby("Pais")["reinvestment"].sum().reset_index()
-            kpi_gestion = eligible_df.groupby("Gestion")["reinvestment"].sum().reset_index()
 
             total_reinvestment = eligible_df["reinvestment"].sum()
-            avg_teo = eligible_df["TeoricoNeto"].sum()
-            avg_win = eligible_df["WinTotalNeto"].sum()
-            avg_trip = eligible_df["Pot_Trip"].sum()
-            avg_visita = eligible_df["Visitas"].mean()
+            total_pot_visita = eligible_df["Pot_Visita"].sum()
+            total_pot_trip = eligible_df["Pot_Trip"].sum()
 
-            c1, c2, c3, c4, c5 = st.columns(5)
-            c1.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
-            c2.metric("📈 Total Theoretical Net", f"{avg_teo:,.0f}")
-            c3.metric("🎯 Total Win Net", f"{avg_win:,.0f}")
-            c4.metric("🧳 Total Pot Trip", f"{avg_trip:,.0f}")
-            c5.metric("👣 Avg Visits", f"{avg_visita:,.2f}")
-
-            df_result["Eligible_Flag"] = df_result["eligible"].astype(int)
-            df_result["Potencial_xVisita"] = df_result["Pot_Visita"]
-            df_result["Potencial_xTrip"] = df_result["Pot_Trip"]
-
-            total_reinv = df_result["reinvestment"].sum()
-            total_pot_visita = df_result["Potencial_xVisita"].sum()
-            total_pot_trip = df_result["Potencial_xTrip"].sum()
-
-            # --- Overall Summary ---
             summary = pd.DataFrame({
-                "Eligible_Count": [df_result["Eligible_Flag"].sum()],
-                "Total_Reinvestment": [total_reinv],
+                "Eligible_Count": [eligible_df["eligible"].sum()],
+                "Total_Reinvestment": [total_reinvestment],
                 "Total_Potencial_Visita": [total_pot_visita],
                 "Total_Potencial_Trip": [total_pot_trip],
             })
@@ -208,14 +183,14 @@ if uploaded:
             st.dataframe(summary, use_container_width=True)
 
             # --- By Country ---
-            pais_summary = df_result.groupby("Pais").agg(
-                Eligible_Count=("Eligible_Flag", "sum"),
+            pais_summary = eligible_df.groupby("Pais").agg(
+                Eligible_Count=("eligible", "sum"),
                 Total_Reinvestment=("reinvestment", "sum"),
-                Total_Potencial_Visita=("Potencial_xVisita", "sum"),
-                Total_Potencial_Trip=("Potencial_xTrip", "sum"),
+                Total_Potencial_Visita=("Pot_Visita", "sum"),
+                Total_Potencial_Trip=("Pot_Trip", "sum"),
             ).reset_index()
 
-            pais_summary["%_Reinvestment"] = (pais_summary["Total_Reinvestment"] / total_reinv * 100).round(2)
+            pais_summary["%_Reinvestment"] = (pais_summary["Total_Reinvestment"] / total_reinvestment * 100).round(2)
             pais_summary["%_Potencial_Visita"] = (pais_summary["Total_Potencial_Visita"] / total_pot_visita * 100).round(2)
             pais_summary["%_Potencial_Trip"] = (pais_summary["Total_Potencial_Trip"] / total_pot_trip * 100).round(2)
 
@@ -223,14 +198,14 @@ if uploaded:
             st.dataframe(pais_summary, use_container_width=True)
 
             # --- By Gestión ---
-            gest_summary = df_result.groupby("Gestion").agg(
-                Eligible_Count=("Eligible_Flag", "sum"),
+            gest_summary = eligible_df.groupby("Gestion").agg(
+                Eligible_Count=("eligible", "sum"),
                 Total_Reinvestment=("reinvestment", "sum"),
-                Total_Potencial_Visita=("Potencial_xVisita", "sum"),
-                Total_Potencial_Trip=("Potencial_xTrip", "sum"),
+                Total_Potencial_Visita=("Pot_Visita", "sum"),
+                Total_Potencial_Trip=("Pot_Trip", "sum"),
             ).reset_index()
 
-            gest_summary["%_Reinvestment"] = (gest_summary["Total_Reinvestment"] / total_reinv * 100).round(2)
+            gest_summary["%_Reinvestment"] = (gest_summary["Total_Reinvestment"] / total_reinvestment * 100).round(2)
             gest_summary["%_Potencial_Visita"] = (gest_summary["Total_Potencial_Visita"] / total_pot_visita * 100).round(2)
             gest_summary["%_Potencial_Trip"] = (gest_summary["Total_Potencial_Trip"] / total_pot_trip * 100).round(2)
 
@@ -238,42 +213,33 @@ if uploaded:
             st.dataframe(gest_summary, use_container_width=True)
 
             ###############################################
-            # CHARTS — PIE WITH %
+            # PIE CHARTS WITH %
             ###############################################
             st.subheader("📈 Reinvestment Distribution")
 
             pais_summary["label"] = pais_summary.apply(
                 lambda x: f"{x['Pais']} ({x['%_Reinvestment']}%)", axis=1
             )
+            gest_summary["label"] = gest_summary.apply(
+                lambda x: f"{x['Gestion']} ({x['%_Reinvestment']}%)", axis=1
+            )
 
             st.altair_chart(
                 alt.Chart(pais_summary).mark_arc(outerRadius=150).encode(
                     theta=alt.Theta(field="Total_Reinvestment", type="quantitative"),
                     color=alt.Color(field="label", type="nominal"),
-                    tooltip=[
-                        alt.Tooltip("Pais:N"),
-                        alt.Tooltip("Total_Reinvestment:Q", format=",.0f"),
-                        alt.Tooltip("%_Reinvestment:Q", format=".2f")
-                    ]
+                    tooltip=["Pais:N", "Total_Reinvestment:Q", "%_Reinvestment:Q"],
                 ).properties(title="Reinvestment by Country (%)"),
-                use_container_width=True
-            )
-
-            gest_summary["label"] = gest_summary.apply(
-                lambda x: f"{x['Gestion']} ({x['%_Reinvestment']}%)", axis=1
+                use_container_width=True,
             )
 
             st.altair_chart(
                 alt.Chart(gest_summary).mark_arc(outerRadius=150).encode(
                     theta=alt.Theta(field="Total_Reinvestment", type="quantitative"),
                     color=alt.Color(field="label", type="nominal"),
-                    tooltip=[
-                        alt.Tooltip("Gestion:N"),
-                        alt.Tooltip("Total_Reinvestment:Q", format=",.0f"),
-                        alt.Tooltip("%_Reinvestment:Q", format=".2f")
-                    ]
+                    tooltip=["Gestion:N", "Total_Reinvestment:Q", "%_Reinvestment:Q"],
                 ).properties(title="Reinvestment by Gestión (%)"),
-                use_container_width=True
+                use_container_width=True,
             )
 
             ###############################################
