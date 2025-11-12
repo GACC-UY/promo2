@@ -1,5 +1,4 @@
 ###############################################
-# ✅ FINAL APP.PY — FULLY FIXED FOR NEW SCHEMA
 # 🎰 CASINO REINVESTMENT PROMOTION BUILDER
 # ✅ FINAL STREAMLIT APP (with per-country caps)
 ###############################################
@@ -33,7 +32,7 @@ def clean(col):
 
 
 ###############################################
-# GESTION NORMALIZER
+# NORMALIZE GESTION / PAIS KEYS
 ###############################################
 def normalize_gestion(val):
     if not isinstance(val, str):
@@ -44,7 +43,7 @@ def normalize_gestion(val):
 
 
 ###############################################
-# 🧠 CLEAN + OPTIMIZED REINVESTMENT ENGINE
+# 🧠 MAIN REINVESTMENT ENGINE
 ###############################################
 def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     df = df.copy()
@@ -67,29 +66,29 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
         st.error(f"❌ Missing required columns: {missing}")
         return None
 
-    # --- Convert to numeric safely ---
+    # --- Convert numerics safely ---
     num_cols = ["TeoricoNeto", "WinTotalNeto", "Visitas", "Pot_Trip",
                 "Pot_Visita", "Promo2", "Comps"]
     for c in num_cols:
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
 
-    # --- Derived metrics ---
+    # --- Derived fields ---
     df["WxV"] = pd.to_numeric(df.get("Pot_Visita", 0), errors="coerce").fillna(0)
     df["Potencial"] = df[["TeoricoNeto", "WinTotalNeto"]].max(axis=1)
     df["GESTION_KEY"] = df["Gestion"].apply(normalize_gestion)
 
-    # --- Choose correct pot by Gestión ---
+    # --- Choose correct pot based on GESTION ---
     df["pot_used"] = np.where(df["GESTION_KEY"].isin(["URY_LOCAL", "URY_RESTO"]),
                               df["Pot_Visita"], df["Pot_Trip"])
 
-    # --- Map percentage by Gestión ---
+    # --- Map percentage per country ---
     pct_norm = {normalize_gestion(k): v for k, v in pct_dict.items()}
     df["pct"] = df["GESTION_KEY"].map(pct_norm).fillna(0)
 
     # --- Eligibility ---
     df["eligible"] = (pd.to_numeric(df["NG"], errors="coerce") == 0)
 
-    # --- Calculate reinvestment ---
+    # --- Calculate reinvestment raw ---
     df["reinvestment_raw"] = df["pot_used"] * df["pct"]
     df["reinvestment"] = 0.0
 
@@ -117,7 +116,7 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
 
     df["reinvestment"] = df.apply(apply_country_caps, axis=1)
 
-    # --- Label reinvestment range ---
+    # --- Reinvestment range label ---
     df["Rango_Reinv"] = np.select(
         [
             df["reinvestment"] == 0,
@@ -129,122 +128,6 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     )
 
     df["reinvestment"] = df["reinvestment"].round(2)
-    return df
-
-
-    ###########################################
-    # RENAME REAL COLUMNS → INTERNAL NAMES
-    ###########################################
-    rename_map = {
-        "Pot_xVisita": "Pot_Visita",
-        "Prom_TeoNeto_Trip": "TeoricoNeto",
-        "Prom_WinNeto_Trip": "WinTotalNeto",
-        "Prom_Visita_Trip": "Visitas",
-        "Pot_Trip": "Pot_Trip",
-    }
-    df = df.rename(columns=rename_map)
-
-    ###########################################
-    # CREATE WxV (potencial per visit)
-    ###########################################
-    if "Pot_Visita" in df.columns:
-        df["WxV"] = pd.to_numeric(df["Pot_Visita"], errors="coerce").fillna(0)
-    else:
-        st.error("Column Pot_xVisita / Pot_Visita not found.")
-        return None
-
-    ###########################################
-    # REQUIRED COLUMNS
-    ###########################################
-    required = [
-        "Gestion", "Pais", "NG",
-        "TeoricoNeto", "WinTotalNeto", "Visitas",
-        "Pot_Trip", "Pot_Visita",
-        "Promo2", "Comps"
-    ]
-
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        st.error(f"❌ Missing required columns: {missing}")
-        st.write("✅ Available columns:", list(df.columns))
-        return None
-
-    ###########################################
-    # CLEAN NUMERIC COLUMNS
-    ###########################################
-    numeric_cols = [
-        "TeoricoNeto", "WinTotalNeto", "Visitas",
-        "Pot_Trip", "Pot_Visita", "WxV",
-        "Promo2", "Comps"
-    ]
-    for c in numeric_cols:
-        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
-
-    ###########################################
-    # BASELINE KPIs
-    ###########################################
-    df["Potencial"] = df[["TeoricoNeto", "WinTotalNeto"]].max(axis=1)
-    df["GESTION_KEY"] = df["Gestion"].apply(normalize_gestion)
-
-    ###########################################
-    # SELECT POT BASED ON GESTION
-    ###########################################
-    def choose_pot(row):
-        if row["GESTION_KEY"] in ("URY_LOCAL", "URY_RESTO"):
-            return row["Pot_Visita"]
-        return row["Pot_Trip"]
-
-    df["pot_used"] = df.apply(choose_pot, axis=1)
-
-    ###########################################
-    # PERCENTAGE MAPPING
-    ###########################################
-    pct_norm = {normalize_gestion(k): v for k, v in pct_dict.items()}
-    df["pct"] = df["GESTION_KEY"].map(pct_norm).fillna(0)
-
-    ###########################################
-    # INITIAL ELIGIBILITY (NG == 0)
-    ###########################################
-    df["eligible"] = (pd.to_numeric(df["NG"], errors="coerce") == 0)
-
-    ###########################################
-    # RAW REINVESTMENT
-    ###########################################
-    df["reinvestment_raw"] = df["pot_used"] * df["pct"]
-    df["reinvestment"] = 0.0
-
-    elig = df["eligible"]
-
-    df.loc[elig, "reinvestment"] = df.loc[elig, "reinvestment_raw"]
-    df.loc[elig & (df["reinvestment"] < min_wallet), "reinvestment"] = min_wallet
-    df.loc[elig, "reinvestment"] = df.loc[elig, "reinvestment"].clip(upper=cap)
-
-    ###########################################
-    # INELIGIBLE CONDITIONS
-    ###########################################
-
-    # 1. Comps > 200
-    df.loc[df["Comps"] > 200, ["eligible", "reinvestment"]] = [False, 0]
-
-    # 2. reinvestment <= Promo2
-    df.loc[df["reinvestment"] <= df["Promo2"], ["eligible", "reinvestment"]] = [False, 0]
-
-    # 3. reinvestment > WxV
-    df.loc[df["reinvestment"] > df["WxV"], ["eligible", "reinvestment"]] = [False, 0]
-
-    ###########################################
-    # REINVESTMENT RANGE
-    ###########################################
-    conditions = [
-        df["reinvestment"] == 0,
-        df["reinvestment"] <= df["WxV"] * 0.5,
-        df["reinvestment"] <= df["WxV"]
-    ]
-    choices = ["NO APLICA", "<50%", "50-100%"]
-    df["Rango_Reinv"] = np.select(conditions, choices, default="NO APLICA")
-
-    df["reinvestment"] = df["reinvestment"].round(2)
-
     return df
 
 
@@ -268,7 +151,7 @@ for pais in ["URY Local", "URY Resto", "ARG", "BRA", "Otros"]:
     max_val = st.sidebar.number_input(f"{pais} Max", 0.0, 100000.0, 10000.0)
     country_caps[pais] = {"min": min_val, "max": max_val}
 
-st.sidebar.subheader("Reinvestment Rules")
+st.sidebar.subheader("Global Reinvestment Rules")
 min_wallet = st.sidebar.number_input("Minimum reinvestment", 0.0, value=100.0)
 cap_value = st.sidebar.number_input("Cap per wallet", 0.0, value=20000.0)
 
@@ -286,71 +169,55 @@ if uploaded:
     )
     df_raw.columns = [clean(c) for c in df_raw.columns]
 
-    st.success("✅ File loaded")
+    st.success("✅ File loaded successfully!")
     st.write(df_raw.head())
 
-    if st.button("Generate Promotion Layout"):
-        df_result = apply_reinvestment(df_raw, pct_dict, min_wallet, cap_value)
-        # ✅ FIXED: add country_caps parameter
+    if st.button("🚀 Generate Promotion Layout"):
         df_result = apply_reinvestment(df_raw, pct_dict, min_wallet, cap_value, country_caps)
 
         if df_result is not None:
             st.success("✅ Promotion Layout Created")
-            st.dataframe(df_result, use_container_width=True)
+            st.dataframe(df_result, width="stretch")
 
-            #############################
-            # KPIS
-            #############################
-            with st.expander("📊 KPIs"):
-                st.subheader("Reinvestment by País")
-                kpais = df_result.groupby("Pais")["reinvestment"].sum().reset_index()
-                st.dataframe(kpais)
+            ###############################################
+            # KPIs
+            ###############################################
+            st.subheader("📊 KPIs")
+            kpais = df_result.groupby("Pais")["reinvestment"].sum().reset_index()
+            kgest = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
 
-                st.subheader("Reinvestment by Gestión")
-                kgest = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
-                st.dataframe(kgest)
-
-                total_reinvestment = df_result["reinvestment"].sum()
+            total_reinvestment = df_result["reinvestment"].sum()
             avg_teo = df_result["TeoricoNeto"].mean()
             avg_win = df_result["WinTotalNeto"].mean()
-                avg_teo = df_result["TeoricoNeto"].mean()
-                avg_win = df_result["WinTotalNeto"].mean()
 
             st.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
             st.metric("📈 Avg Theoretical Net", f"{avg_teo:,.0f}")
             st.metric("🎯 Avg Win Net", f"{avg_win:,.0f}")
 
-            # Export Excel safely
-            def to_excel(df):
-                out = BytesIO()
-                with pd.ExcelWriter(out, engine="xlsxwriter") as wr:
-                    df.to_excel(wr, index=False)
-                return out.getvalue()
-                st.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
-                st.metric("📈 Avg Theoretical Net", f"{avg_teo:,.0f}")
-                st.metric("🎯 Avg Win Net", f"{avg_win:,.0f}")
+            ###############################################
+            # CHARTS
+            ###############################################
+            st.subheader("Pie Chart by País")
+            st.altair_chart(
+                alt.Chart(kpais).mark_arc().encode(
+                    theta="reinvestment",
+                    color="Pais"
+                ),
+                width="stretch"
+            )
 
-                st.subheader("Pie Chart by País")
-                st.altair_chart(
-                    alt.Chart(kpais).mark_arc().encode(
-                        theta="reinvestment",
-                        color="Pais"
-                    ),
-                    use_container_width=True
-                )
+            st.subheader("Pie Chart by Gestión")
+            st.altair_chart(
+                alt.Chart(kgest).mark_arc().encode(
+                    theta="reinvestment",
+                    color="Gestion"
+                ),
+                width="stretch"
+            )
 
-                st.subheader("Pie Chart by Gestión")
-                st.altair_chart(
-                    alt.Chart(kgest).mark_arc().encode(
-                        theta="reinvestment",
-                        color="Gestion"
-                    ),
-                    use_container_width=True
-                )
-
-            #############################
+            ###############################################
             # EXPORT
-            #############################
+            ###############################################
             def to_excel(df):
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine="xlsxwriter") as wr:
