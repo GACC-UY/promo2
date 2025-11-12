@@ -1,6 +1,6 @@
 ###############################################
 # 🎰 CASINO REINVESTMENT PROMOTION BUILDER
-# ✅ FINAL STREAMLIT APP (per-country %, caps, URY pot logic)
+# ✅ FINAL STREAMLIT APP (eligibility hard rule: 0 reinvestment)
 ###############################################
 
 import streamlit as st
@@ -31,10 +31,9 @@ def clean(col):
     return col.strip("_")
 
 ###############################################
-# NORMALIZE TEXT (Pais / Gestion)
+# NORMALIZE TEXT
 ###############################################
 def normalize_gestion(val):
-    """Normalize country/gestion names for consistent matching."""
     if not isinstance(val, str):
         val = str(val)
     val = "".join(c for c in unicodedata.normalize("NFKD", val) if not unicodedata.combining(c))
@@ -59,7 +58,6 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     }
     df.rename(columns=rename_map, inplace=True)
 
-    # --- Validate required columns ---
     required_cols = [
         "Gestion", "Pais", "NG", "TeoricoNeto", "WinTotalNeto",
         "Visitas", "Pot_Trip", "Pot_Visita", "Promo2", "Comps"
@@ -69,12 +67,12 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
         st.error(f"❌ Missing required columns: {missing}")
         return None
 
-    # --- Convert numerics safely ---
+    # --- Convert numerics ---
     num_cols = ["TeoricoNeto", "WinTotalNeto", "Visitas", "Pot_Trip", "Pot_Visita", "Promo2", "Comps"]
     for c in num_cols:
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
 
-    # --- Derived fields ---
+    # Derived fields
     df["WxV"] = df["Pot_Visita"]
     df["Potencial"] = df[["TeoricoNeto", "WinTotalNeto"]].max(axis=1)
     df["PAIS_KEY"] = df["Pais"].apply(normalize_gestion)
@@ -92,8 +90,6 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
 
     ###############################################
     # ✅ POT USED BY COUNTRY
-    # Uruguay (Local + Resto): use Pot_Visita
-    # Others: use Pot_Trip
     ###############################################
     def choose_pot(row):
         if "URY" in normalize_gestion(row["Pais"]):
@@ -108,23 +104,22 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     ###############################################
     df["reinvestment_raw"] = np.where(df["eligible"], df["pot_used"] * df["pct"], 0)
 
-    # Apply global min/cap
-    df["reinvestment"] = df["reinvestment_raw"]
+    ###############################################
+    # ✅ Apply caps only if eligible
+    ###############################################
+    df["reinvestment"] = 0.0
+
     elig = df["eligible"]
+    df.loc[elig, "reinvestment"] = df.loc[elig, "reinvestment_raw"]
     df.loc[elig & (df["reinvestment"] < min_wallet), "reinvestment"] = min_wallet
     df.loc[elig, "reinvestment"] = df.loc[elig, "reinvestment"].clip(upper=cap)
-
-    ###############################################
-    # ❌ Ineligibility rules
-    ###############################################
-    # Must offer MORE than Promo2
-    df.loc[df["Comps"] > 200, ["eligible", "reinvestment"]] = [False, 0]
-    df.loc[df["reinvestment"] <= df["Promo2"], ["eligible", "reinvestment"]] = [False, 0]
 
     ###############################################
     # ✅ Apply per-country min/max caps
     ###############################################
     def apply_country_caps(row):
+        if not row["eligible"]:
+            return 0
         pais = str(row.get("Pais", "")).strip()
         reinv = row.get("reinvestment", 0)
         for key, rule in country_caps.items():
@@ -135,6 +130,17 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
         return reinv
 
     df["reinvestment"] = df.apply(apply_country_caps, axis=1)
+
+    ###############################################
+    # ❌ Ineligibility rules (must offer > Promo2)
+    ###############################################
+    df.loc[df["Comps"] > 200, ["eligible", "reinvestment"]] = [False, 0]
+    df.loc[df["reinvestment"] <= df["Promo2"], ["eligible", "reinvestment"]] = [False, 0]
+
+    ###############################################
+    # ✅ FINAL SANITY: non-eligible → reinvestment = 0
+    ###############################################
+    df.loc[~df["eligible"], "reinvestment"] = 0
 
     ###############################################
     # LABELS
@@ -184,11 +190,7 @@ st.subheader("📥 Upload CSV/XLSX")
 uploaded = st.file_uploader("Select File", type=["csv", "xlsx"])
 
 if uploaded:
-    df_raw = (
-        pd.read_csv(uploaded)
-        if uploaded.name.endswith(".csv")
-        else pd.read_excel(uploaded)
-    )
+    df_raw = pd.read_csv(uploaded) if uploaded.name.endswith(".csv") else pd.read_excel(uploaded)
     df_raw.columns = [clean(c) for c in df_raw.columns]
 
     st.success("✅ File loaded successfully!")
@@ -206,14 +208,15 @@ if uploaded:
             ###############################################
             st.subheader("📊 KPIs Summary")
 
-            kpi_pais = df_result.groupby("Pais")["reinvestment"].sum().reset_index()
-            kpi_gestion = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
+            eligible_df = df_result[df_result["eligible"]]
+            kpi_pais = eligible_df.groupby("Pais")["reinvestment"].sum().reset_index()
+            kpi_gestion = eligible_df.groupby("Gestion")["reinvestment"].sum().reset_index()
 
-            total_reinvestment = df_result["reinvestment"].sum()
-            avg_teo = df_result["TeoricoNeto"].mean()
-            avg_win = df_result["WinTotalNeto"].mean()
-            avg_trip = df_result["Pot_Trip"].mean()
-            avg_visita = df_result["Visitas"].mean()
+            total_reinvestment = eligible_df["reinvestment"].sum()
+            avg_teo = eligible_df["TeoricoNeto"].mean()
+            avg_win = eligible_df["WinTotalNeto"].mean()
+            avg_trip = eligible_df["Pot_Trip"].mean()
+            avg_visita = eligible_df["Visitas"].mean()
 
             c1, c2, c3, c4, c5 = st.columns(5)
             c1.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
@@ -222,7 +225,7 @@ if uploaded:
             c4.metric("🧳 Avg Pot Trip", f"{avg_trip:,.0f}")
             c5.metric("👣 Avg Visits", f"{avg_visita:,.2f}")
 
-            st.subheader("🌍 Reinvestment Breakdown")
+            st.subheader("🌍 Reinvestment Breakdown (Eligible Only)")
             st.dataframe(kpi_pais, use_container_width=True)
             st.dataframe(kpi_gestion, use_container_width=True)
 
