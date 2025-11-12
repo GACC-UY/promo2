@@ -200,69 +200,78 @@ if uploaded:
     if st.button("Generate Promotion Layout"):
         df_result = apply_reinvestment(df_raw, pct_dict, min_wallet, cap_value)
 
-        if df_result is not None:
-            st.success("✅ Promotion Layout Created")
-            st.dataframe(df_result, use_container_width=True)
+    if df_result is not None:
+        st.success("✅ Promotion Layout Created")
+        st.dataframe(df_result, width='stretch')
 
-# === KPI SUMMARY ===
-if not df_result.empty:
-    st.subheader("📊 KPI Summary")
+        #############################
+        # === KPI SUMMARY ===
+        #############################
+        if not df_result.empty:
+            st.subheader("📊 KPI Summary")
 
-    # Clean and calculate core KPIs
-    total_reinvestment = df_result["Reinversion_Juego"].sum() if "Reinversion_Juego" in df_result else 0
-    avg_teo = df_result["Prom_TeoNeto_Trip"].mean() if "Prom_TeoNeto_Trip" in df_result else 0
-    avg_win = df_result["Prom_WinNeto_Trip"].mean() if "Prom_WinNeto_Trip" in df_result else 0
-    avg_trip = df_result["Pot_Trip"].mean() if "Pot_Trip" in df_result else 0
-    avg_visita = df_result["Prom_Visita_Trip"].mean() if "Prom_Visita_Trip" in df_result else 0
+            total_reinvestment = df_result["reinvestment"].sum()
+            avg_teo = df_result["TeoricoNeto"].mean()
+            avg_win = df_result["WinTotalNeto"].mean()
+            avg_trip = df_result["Pot_Trip"].mean()
+            avg_visita = df_result["Visitas"].mean()
 
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
-    col2.metric("📈 Avg Theoretical Net (Trip)", f"{avg_teo:,.0f}")
-    col3.metric("🎯 Avg Win Net (Trip)", f"{avg_win:,.0f}")
-    col4.metric("🧳 Avg Pot Trip", f"{avg_trip:,.0f}")
-    col5.metric("👣 Avg Visits (Trip)", f"{avg_visita:,.2f}")
+            col1, col2, col3, col4, col5 = st.columns(5)
+            col1.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
+            col2.metric("📈 Avg Theoretical Net (Trip)", f"{avg_teo:,.0f}")
+            col3.metric("🎯 Avg Win Net (Trip)", f"{avg_win:,.0f}")
+            col4.metric("🧳 Avg Pot Trip", f"{avg_trip:,.0f}")
+            col5.metric("👣 Avg Visits (Trip)", f"{avg_visita:,.2f}")
 
-    # ==========================
-    # AGGREGATED KPIs by country and gestion
-    # ==========================
-    st.subheader("🌍 Reinvestment Breakdown")
+            #############################
+            # AGGREGATED KPIs
+            #############################
+            st.subheader("🌍 Reinvestment Breakdown")
 
-    if "Pais" in df_result.columns:
-        reinv_by_pais = df_result.groupby("Pais")["Reinversion_Juego"].sum().reset_index()
-        st.write(reinv_by_pais)
-        fig_pais = px.pie(reinv_by_pais, names="Pais", values="Reinversion_Juego",
-                          title="Reinvestment by Country", hole=0.4)
-        st.plotly_chart(fig_pais, use_container_width=True)
+            import plotly.express as px
 
-    if "Gestion" in df_result.columns:
-        reinv_by_gestion = df_result.groupby("Gestion")["Reinversion_Juego"].sum().reset_index()
-        st.write(reinv_by_gestion)
-        fig_gestion = px.pie(reinv_by_gestion, names="Gestion", values="Reinversion_Juego",
-                             title="Reinvestment by Gestion", hole=0.4)
-        st.plotly_chart(fig_gestion, use_container_width=True)
+            if "Pais" in df_result.columns:
+                reinv_by_pais = df_result.groupby("Pais")["reinvestment"].sum().reset_index()
+                st.write(reinv_by_pais)
+                fig_pais = px.pie(
+                    reinv_by_pais,
+                    names="Pais",
+                    values="reinvestment",
+                    title="Reinvestment by Country",
+                    hole=0.4
+                )
+                st.plotly_chart(fig_pais, width='stretch')
 
-    # ==========================
-    # Additional insights
-    # ==========================
-    st.subheader("📈 Additional KPIs")
-    df_result["Reinvestment_Rate"] = df_result["Reinversion_Juego"] / (df_result["Prom_TeoNeto_Trip"] + 1e-6)
-    avg_reinv_rate = df_result["Reinvestment_Rate"].mean() * 100
-    st.metric("Reinvestment Rate (%)", f"{avg_reinv_rate:.2f}%")
+            if "Gestion" in df_result.columns:
+                reinv_by_gestion = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
+                st.write(reinv_by_gestion)
+                fig_gestion = px.pie(
+                    reinv_by_gestion,
+                    names="Gestion",
+                    values="reinvestment",
+                    title="Reinvestment by Gestion",
+                    hole=0.4
+                )
+                st.plotly_chart(fig_gestion, width='stretch')
 
-else:
-    st.warning("No data available to calculate KPIs.")
-
+            #############################
+            # ADDITIONAL KPIs
+            #############################
+            st.subheader("📈 Additional KPIs")
+            df_result["Reinvestment_Rate"] = df_result["reinvestment"] / (df_result["TeoricoNeto"] + 1e-6)
+            avg_reinv_rate = df_result["Reinvestment_Rate"].mean() * 100
+            st.metric("Reinvestment Rate (%)", f"{avg_reinv_rate:.2f}%")
 
             #############################
             # EXPORT
             #############################
-    def to_excel(df):
+            def to_excel(df):
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine="xlsxwriter") as wr:
                     df.to_excel(wr, index=False)
                 return out.getvalue()
 
-    st.download_button(
+            st.download_button(
                 "⬇️ Download Excel",
                 to_excel(df_result),
                 "promotion_layout.xlsx"
