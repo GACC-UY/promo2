@@ -213,6 +213,56 @@ if uploaded:
             ###############################################
             st.subheader("📊 KPI Summary")
 
+                        ###############################################
+            # 📊 KPI SECTION
+            ###############################################
+            st.subheader("📊 KPIs Summary")
+
+            eligible_df = df_result[df_result["eligible"]]
+            kpi_pais = eligible_df.groupby("Pais")["reinvestment"].sum().reset_index()
+            kpi_gestion = eligible_df.groupby("Gestion")["reinvestment"].sum().reset_index()
+
+            total_reinvestment = eligible_df["reinvestment"].sum()
+            avg_teo = eligible_df["TeoricoNeto"].mean()
+            avg_win = eligible_df["WinTotalNeto"].mean()
+            avg_trip = eligible_df["Pot_Trip"].mean()
+            avg_visita = eligible_df["Visitas"].mean()
+
+            c1, c2, c3, c4, c5 = st.columns(5)
+            c1.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
+            c2.metric("📈 Avg Theoretical Net", f"{avg_teo:,.0f}")
+            c3.metric("🎯 Avg Win Net", f"{avg_win:,.0f}")
+            c4.metric("🧳 Avg Pot Trip", f"{avg_trip:,.0f}")
+            c5.metric("👣 Avg Visits", f"{avg_visita:,.2f}")
+
+            st.subheader("🌍 Reinvestment Breakdown (Eligible Only)")
+            st.dataframe(kpi_pais, use_container_width=True)
+            st.dataframe(kpi_gestion, use_container_width=True)
+
+            ###############################################
+            # 📈 CHARTS
+            ###############################################
+            st.subheader("📊 Pie Chart by País")
+            st.altair_chart(
+                alt.Chart(kpi_pais).mark_arc().encode(
+                    theta="reinvestment",
+                    color="Pais",
+                    tooltip=["Pais", "reinvestment"]
+                ),
+                use_container_width=True
+            )
+
+            st.subheader("📊 Pie Chart by Gestión")
+            st.altair_chart(
+                alt.Chart(kpi_gestion).mark_arc().encode(
+                    theta="reinvestment",
+                    color="Gestion",
+                    tooltip=["Gestion", "reinvestment"]
+                ),
+                use_container_width=True
+            )
+
+            
             df_result["Eligible_Flag"] = df_result["eligible"].astype(int)
             df_result["Potencial_xVisita"] = df_result["Pot_Visita"]
             df_result["Potencial_xTrip"] = df_result["Pot_Trip"]
