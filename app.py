@@ -1,5 +1,5 @@
 ###############################################
-# ✅ FINAL APP.PY — FULLY FIXED FOR NEW SCHEMA
+# ✅ FINAL APP.PY — WITH USER-DEFINED COUNTRY CAPS
 ###############################################
 
 import streamlit as st
@@ -44,7 +44,7 @@ def normalize_gestion(val):
 ###############################################
 # MAIN REINVESTMENT ENGINE
 ###############################################
-def apply_reinvestment(df, pct_dict, min_wallet, cap):
+def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     df = df.copy()
 
     ###########################################
@@ -137,31 +137,17 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap):
     ###########################################
     # INELIGIBLE CONDITIONS
     ###########################################
-
-    # 1. Comps > 200
     df.loc[df["Comps"] > 200, ["eligible", "reinvestment"]] = [False, 0]
-
-    # 2. reinvestment <= Promo2
     df.loc[df["reinvestment"] <= df["Promo2"], ["eligible", "reinvestment"]] = [False, 0]
-
-# 3. reinvestment > WxV
     df.loc[df["reinvestment"] > df["WxV"], ["eligible", "reinvestment"]] = [False, 0]
 
     ###########################################
     # COUNTRY-SPECIFIC REINVESTMENT CAPS
     ###########################################
-    caps = {
-        "URY_Local": {"min": 100, "max": 10000},
-        "URY_Resto": {"min": 50, "max": 8000},
-        "ARG": {"min": 200, "max": 12000},
-        "BRA": {"min": 150, "max": 10000},
-        "Otros": {"min": 75, "max": 7000},
-    }
-
     def apply_caps(row):
         pais = str(row.get("Pais", "")).strip()
         reinv = row.get("reinvestment", 0)
-        for key, rule in caps.items():
+        for key, rule in country_caps.items():
             if key.replace(" ", "_").upper() == pais.replace(" ", "_").upper():
                 reinv = max(reinv, rule["min"])
                 reinv = min(reinv, rule["max"])
@@ -169,6 +155,7 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap):
         return reinv
 
     df["reinvestment"] = df.apply(apply_caps, axis=1)
+
     ###########################################
     # REINVESTMENT RANGE
     ###########################################
@@ -181,7 +168,6 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap):
     df["Rango_Reinv"] = np.select(conditions, choices, default="NO APLICA")
 
     df["reinvestment"] = df["reinvestment"].round(2)
-
     return df
 
 
@@ -198,6 +184,21 @@ pct_dict = {
     "Otros": st.sidebar.number_input("Otros %", 0.0, 100.0, 5.0) / 100,
 }
 
+###############################################
+# USER-DEFINED COUNTRY CAPS
+###############################################
+st.sidebar.subheader("Country Reinvestment Caps")
+
+country_caps = {}
+for pais in ["URY Local", "URY Resto", "ARG", "BRA", "Otros"]:
+    st.sidebar.markdown(f"**{pais}**")
+    min_val = st.sidebar.number_input(f"{pais} Min", 0.0, 50000.0, 100.0 if "URY" in pais else 200.0)
+    max_val = st.sidebar.number_input(f"{pais} Max", 0.0, 100000.0, 10000.0)
+    country_caps[pais] = {"min": min_val, "max": max_val}
+
+###############################################
+# REINVESTMENT RULES
+###############################################
 st.sidebar.subheader("Reinvestment Rules")
 min_wallet = st.sidebar.number_input("Minimum reinvestment", 0.0, value=100.0)
 cap_value = st.sidebar.number_input("Cap per wallet", 0.0, value=20000.0)
@@ -220,16 +221,16 @@ if uploaded:
     st.write(df_raw.head())
 
     if st.button("Generate Promotion Layout"):
-        df_result = apply_reinvestment(df_raw, pct_dict, min_wallet, cap_value)
+        df_result = apply_reinvestment(df_raw, pct_dict, min_wallet, cap_value, country_caps)
 
-    if df_result is not None:
-        st.success("✅ Promotion Layout Created")
-        st.dataframe(df_result, width='stretch')
+        if df_result is not None:
+            st.success("✅ Promotion Layout Created")
+            st.dataframe(df_result, width='stretch')
 
-        # === KPI SUMMARY ===
-        if not df_result.empty:
+            ###########################################
+            # KPI SUMMARY
+            ###########################################
             st.subheader("📊 KPI Summary")
-
             total_reinvestment = df_result["reinvestment"].sum()
             avg_teo = df_result["TeoricoNeto"].mean()
             avg_win = df_result["WinTotalNeto"].mean()
@@ -245,57 +246,28 @@ if uploaded:
 
             st.subheader("🌍 Reinvestment Breakdown")
             with st.expander("📊 Summary KPIs"):
-
                 total_reinv = df_result["reinvestment"].sum()
                 total_eligible = int(df_result["eligible"].sum())
 
                 st.metric("Total Reinvestment (sum)", f"{total_reinv:,.2f}")
                 st.metric("Eligible Players", f"{total_eligible:,}")
 
-                # Reinvestment per País
                 st.subheader("Reinvestment by País")
                 kpi_pais = df_result.groupby("Pais")["reinvestment"].sum().reset_index()
                 st.dataframe(kpi_pais, width='stretch')
 
-                # Reinvestment per Gestion
                 st.subheader("Reinvestment by Gestión")
                 kpi_gestion = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
                 st.dataframe(kpi_gestion, width='stretch')
-
-                # Additional KPIs
-                st.subheader("Additional KPIs")
-
-                df_result["Reinv_pct_Teorico"] = np.where(
-                    df_result["TeoricoNeto"] > 0,
-                    df_result["reinvestment"] / df_result["TeoricoNeto"],
-                    0
-                )
-
-                df_result["Reinv_pct_Actual"] = np.where(
-                    df_result["WinTotalNeto"] > 0,
-                    df_result["reinvestment"] / df_result["WinTotalNeto"],
-                    0
-                )
-
-                extra_kpis = {
-                    "Avg Reinvestment % over Teórico": df_result["Reinv_pct_Teorico"].mean(),
-                    "Avg Reinvestment % over Actual": df_result["Reinv_pct_Actual"].mean(),
-                    "Avg Reinvestment per Visit": (df_result["reinvestment"] / df_result["Visitas"].replace(0, np.nan)).mean(),
-                    "Eligibility Rate (%)": df_result["eligible"].mean() * 100,
-                    "Excluded Players (NG or >100%)": len(df_result) - df_result["eligible"].sum(),
-                    "Average WxV": df_result["WxV"].mean(),
-                    "Average Potencial": df_result["Potencial"].mean(),
-                    "Average Trip Win": df_result["Pot_Trip"].mean(),
-                }
-
-                st.json(extra_kpis)
 
             st.subheader("📈 Additional KPIs")
             df_result["Reinvestment_Rate"] = df_result["reinvestment"] / (df_result["TeoricoNeto"] + 1e-6)
             avg_rate = df_result["Reinvestment_Rate"].mean() * 100
             st.metric("Reinvestment Rate (%)", f"{avg_rate:.2f}%")
 
+            ###########################################
             # EXPORT
+            ###########################################
             def to_excel(df):
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine="xlsxwriter") as wr:
@@ -305,4 +277,3 @@ if uploaded:
             st.download_button("⬇️ Download Excel",
                                to_excel(df_result),
                                "promotion_layout.xlsx")
-
