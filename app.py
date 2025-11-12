@@ -263,7 +263,7 @@ if uploaded:
                     "Excluded Players (NG or >100%)": len(df_result) - df_result["eligible"].sum(),
                     "Average WxV": df_result["WxV"].mean(),
                     "Average Potencial": df_result["Potencial"].mean(),
-                    "Average Trip Win": df_result["Trip_Esperado"].mean(),
+                    "Average Trip Win": df_result["Pot_Trip"].mean(),
                 }
 
                 st.json(extra_kpis)
