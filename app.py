@@ -1,6 +1,6 @@
 ###############################################
 # 🎰 CASINO REINVESTMENT PROMOTION BUILDER
-# ✅ FINAL STREAMLIT APP (with per-country caps)
+# ✅ FINAL STREAMLIT APP (per-country %, caps, URY pot logic)
 ###############################################
 
 import streamlit as st
@@ -30,6 +30,17 @@ def clean(col):
     col = re.sub(r"_+", "_", col)
     return col.strip("_")
 
+###############################################
+# NORMALIZE TEXT (Pais / Gestion)
+###############################################
+def normalize_gestion(val):
+    """Normalize country/gestion names for consistent matching."""
+    if not isinstance(val, str):
+        val = str(val)
+    val = "".join(c for c in unicodedata.normalize("NFKD", val) if not unicodedata.combining(c))
+    val = val.strip().replace(" ", "_").upper()
+    val = re.sub(r"[^0-9A-Z_]", "", val)
+    return val
 
 
 ###############################################
@@ -49,47 +60,70 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     df.rename(columns=rename_map, inplace=True)
 
     # --- Validate required columns ---
-    required_cols = ["Gestion", "Pais", "NG", "TeoricoNeto", "WinTotalNeto",
-                     "Visitas", "Pot_Trip", "Pot_Visita", "Promo2", "Comps"]
+    required_cols = [
+        "Gestion", "Pais", "NG", "TeoricoNeto", "WinTotalNeto",
+        "Visitas", "Pot_Trip", "Pot_Visita", "Promo2", "Comps"
+    ]
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
         st.error(f"❌ Missing required columns: {missing}")
         return None
 
     # --- Convert numerics safely ---
-    num_cols = ["TeoricoNeto", "WinTotalNeto", "Visitas", "Pot_Trip",
-                "Pot_Visita", "Promo2", "Comps"]
+    num_cols = ["TeoricoNeto", "WinTotalNeto", "Visitas", "Pot_Trip", "Pot_Visita", "Promo2", "Comps"]
     for c in num_cols:
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
 
     # --- Derived fields ---
-    df["WxV"] = pd.to_numeric(df.get("Pot_Visita", 0), errors="coerce").fillna(0)
+    df["WxV"] = df["Pot_Visita"]
     df["Potencial"] = df[["TeoricoNeto", "WinTotalNeto"]].max(axis=1)
-    df["GESTION_KEY"] = df["Gestion"].apply(normalize_gestion)
+    df["PAIS_KEY"] = df["Pais"].apply(normalize_gestion)
 
-
-    # --- Map percentage per country ---
+    ###############################################
+    # ✅ MAP PERCENTAGE PER COUNTRY
+    ###############################################
     pct_norm = {normalize_gestion(k): v for k, v in pct_dict.items()}
-    df["pct"] = df["GESTION_KEY"].map(pct_norm).fillna(0)
+    df["pct"] = df["PAIS_KEY"].map(pct_norm).fillna(0)
 
-    # --- Eligibility ---
+    ###############################################
+    # ✅ ELIGIBILITY
+    ###############################################
     df["eligible"] = (pd.to_numeric(df["NG"], errors="coerce") == 0)
 
-    # --- Calculate reinvestment raw ---
-    df["reinvestment_raw"] = df["Pot_Visita"] * df["pct"]
+    ###############################################
+    # ✅ POT USED BY COUNTRY
+    # Uruguay (Local + Resto): use Pot_Visita
+    # Others: use Pot_Trip
+    ###############################################
+    def choose_pot(row):
+        if "URY" in normalize_gestion(row["Pais"]):
+            return row["Pot_Visita"]
+        else:
+            return row["Pot_Trip"]
 
-    # --- Apply global min/cap ---
+    df["pot_used"] = df.apply(choose_pot, axis=1)
+
+    ###############################################
+    # ✅ BASE REINVESTMENT FORMULA
+    ###############################################
+    df["reinvestment_raw"] = np.where(df["eligible"], df["pot_used"] * df["pct"], 0)
+
+    # Apply global min/cap
+    df["reinvestment"] = df["reinvestment_raw"]
     elig = df["eligible"]
-    df.loc[elig, "reinvestment"] = df.loc[elig, "reinvestment_raw"]
     df.loc[elig & (df["reinvestment"] < min_wallet), "reinvestment"] = min_wallet
     df.loc[elig, "reinvestment"] = df.loc[elig, "reinvestment"].clip(upper=cap)
 
-    # --- Ineligibility rules ---
+    ###############################################
+    # ❌ Ineligibility rules
+    ###############################################
+    # Must offer MORE than Promo2
     df.loc[df["Comps"] > 200, ["eligible", "reinvestment"]] = [False, 0]
     df.loc[df["reinvestment"] <= df["Promo2"], ["eligible", "reinvestment"]] = [False, 0]
-  
 
-    # --- Apply per-country min/max caps ---
+    ###############################################
+    # ✅ Apply per-country min/max caps
+    ###############################################
     def apply_country_caps(row):
         pais = str(row.get("Pais", "")).strip()
         reinv = row.get("reinvestment", 0)
@@ -102,7 +136,9 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
 
     df["reinvestment"] = df.apply(apply_country_caps, axis=1)
 
-    # --- Reinvestment range label ---
+    ###############################################
+    # LABELS
+    ###############################################
     df["Rango_Reinv"] = np.select(
         [
             df["reinvestment"] == 0,
@@ -163,46 +199,58 @@ if uploaded:
 
         if df_result is not None:
             st.success("✅ Promotion Layout Created")
-            st.dataframe(df_result, width="stretch")
+            st.dataframe(df_result, use_container_width=True)
 
             ###############################################
-            # KPIs
+            # 📊 KPI SECTION
             ###############################################
-            st.subheader("📊 KPIs")
-            kpais = df_result.groupby("Pais")["reinvestment"].sum().reset_index()
-            kgest = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
+            st.subheader("📊 KPIs Summary")
+
+            kpi_pais = df_result.groupby("Pais")["reinvestment"].sum().reset_index()
+            kpi_gestion = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
 
             total_reinvestment = df_result["reinvestment"].sum()
             avg_teo = df_result["TeoricoNeto"].mean()
             avg_win = df_result["WinTotalNeto"].mean()
+            avg_trip = df_result["Pot_Trip"].mean()
+            avg_visita = df_result["Visitas"].mean()
 
-            st.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
-            st.metric("📈 Avg Theoretical Net", f"{avg_teo:,.0f}")
-            st.metric("🎯 Avg Win Net", f"{avg_win:,.0f}")
+            c1, c2, c3, c4, c5 = st.columns(5)
+            c1.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
+            c2.metric("📈 Avg Theoretical Net", f"{avg_teo:,.0f}")
+            c3.metric("🎯 Avg Win Net", f"{avg_win:,.0f}")
+            c4.metric("🧳 Avg Pot Trip", f"{avg_trip:,.0f}")
+            c5.metric("👣 Avg Visits", f"{avg_visita:,.2f}")
+
+            st.subheader("🌍 Reinvestment Breakdown")
+            st.dataframe(kpi_pais, use_container_width=True)
+            st.dataframe(kpi_gestion, use_container_width=True)
 
             ###############################################
-            # CHARTS
+            # 📈 CHARTS
             ###############################################
-            st.subheader("Pie Chart by País")
+            st.subheader("📊 Pie Chart by País")
             st.altair_chart(
-                alt.Chart(kpais).mark_arc().encode(
+                alt.Chart(kpi_pais).mark_arc().encode(
                     theta="reinvestment",
-                    color="Pais"
+                    color="Pais",
+                    tooltip=["Pais", "reinvestment"]
                 ),
-                width="stretch"
+                use_container_width=True
             )
 
-            st.subheader("Pie Chart by Gestión")
+            st.subheader("📊 Pie Chart by Gestión")
             st.altair_chart(
-                alt.Chart(kgest).mark_arc().encode(
+                alt.Chart(kpi_gestion).mark_arc().encode(
                     theta="reinvestment",
-                    color="Gestion"
+                    color="Gestion",
+                    tooltip=["Gestion", "reinvestment"]
                 ),
-                width="stretch"
+                use_container_width=True
             )
 
             ###############################################
-            # EXPORT
+            # 📤 EXPORT
             ###############################################
             def to_excel(df):
                 out = BytesIO()
