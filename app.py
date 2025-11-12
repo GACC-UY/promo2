@@ -1,6 +1,6 @@
 ###############################################
 # 🎰 CASINO REINVESTMENT PROMOTION BUILDER
-# ✅ FINAL STREAMLIT APP (eligibility + hostname exception + KPI % + pie charts)
+# ✅ FINAL STREAMLIT APP (eligibility + country % + KPI % + pie charts)
 ###############################################
 
 import streamlit as st
@@ -51,7 +51,7 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     df.rename(columns=rename_map, inplace=True)
 
     required_cols = ["Gestion", "Pais", "NG", "TeoricoNeto", "WinTotalNeto",
-                     "Visitas", "Pot_Trip", "Pot_Visita", "Promo2", "Comps", "hostname"]
+                     "Visitas", "Pot_Trip", "Pot_Visita", "Promo2", "Comps"]
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
         st.error(f"❌ Missing required columns: {missing}")
@@ -94,7 +94,8 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     df.loc[~df["eligible"], "reinvestment"] = 0
 
     # --- Eligibility refinements ---
-    df.loc[df["Comps"] > 200, ["eligible", "reinvestment"]] = [False, 0]
+    df.loc[df["Comps"] > 2000, ["eligible", "reinvestment"]] = [False, 0]
+    df.loc[df["NG"] == 1, ["eligible", "reinvestment"]] = [False, 0]
     df.loc[df["reinvestment"] <= df["Promo2"], ["eligible", "reinvestment"]] = [False, 0]
 
     # --- Reinvestment range label ---
@@ -108,22 +109,8 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
         default="NO APLICA",
     )
 
-    # --- If NO APLICA => eligible = 0 ---
+    # --- Final eligibility filter ---
     df.loc[df["Rango_Reinv"] == "NO APLICA", ["eligible", "reinvestment"]] = [False, 0]
-
-    # --- HOSTNAME EXCEPTION RULE ---
-    # If hostname ≠ none/enjoy punta del este and reinvestment == 0 → assign min for that country
-    def hostname_exception(row):
-        host = str(row.get("hostname", "")).strip().lower()
-        pais = str(row.get("Pais", "")).strip()
-        reinv = row.get("reinvestment", 0)
-        if host not in ["none", "enjoy punta del este"] and reinv == 0:
-            for key, rule in country_caps.items():
-                if normalize_gestion(key) == normalize_gestion(pais):
-                    return rule["min"]
-        return reinv
-
-    df["reinvestment"] = df.apply(hostname_exception, axis=1)
 
     df["reinvestment"] = df["reinvestment"].round(2)
     return df
@@ -182,7 +169,6 @@ if uploaded:
             st.subheader("📊 KPI Summary")
 
             eligible_df = df_result[df_result["eligible"]]
-
             total_reinvestment = eligible_df["reinvestment"].sum()
             total_pot_visita = eligible_df["Pot_Visita"].sum()
             total_pot_trip = eligible_df["Pot_Trip"].sum()
