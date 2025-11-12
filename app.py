@@ -1,6 +1,6 @@
 ###############################################
 # 🎰 CASINO REINVESTMENT PROMOTION BUILDER
-# ✅ FINAL STREAMLIT APP (eligibility + country % + KPI % + pie charts)
+# ✅ FINAL STREAMLIT APP (eligibility reasons + KPI % + pie charts)
 ###############################################
 
 import streamlit as st
@@ -72,6 +72,7 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
 
     # --- Eligibility base ---
     df["eligible"] = (pd.to_numeric(df["NG"], errors="coerce") == 0)
+    df["Reason_Not_Eligible"] = ""
 
     # --- Raw reinvestment ---
     df["reinvestment_raw"] = df["Pot_Visita"] * df["pct"]
@@ -93,10 +94,20 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     df.loc[df["eligible"], "reinvestment"] = df.loc[df["eligible"], "reinvestment"].clip(lower=min_wallet, upper=cap)
     df.loc[~df["eligible"], "reinvestment"] = 0
 
-    # --- Eligibility refinements ---
-    df.loc[df["Comps"] > 2000, ["eligible", "reinvestment"]] = [False, 0]
-    df.loc[df["NG"] == 1, ["eligible", "reinvestment"]] = [False, 0]
-    df.loc[df["reinvestment"] <= df["Promo2"], ["eligible", "reinvestment"]] = [False, 0]
+    # --- Rule 1: Comps > 2000 ---
+    mask = df["Comps"] > 2000
+    df.loc[mask, ["eligible", "reinvestment"]] = [False, 0]
+    df.loc[mask, "Reason_Not_Eligible"] += "Comps > 2000, "
+
+    # --- Rule 2: NG = 1 ---
+    mask = df["NG"] == 1
+    df.loc[mask, ["eligible", "reinvestment"]] = [False, 0]
+    df.loc[mask, "Reason_Not_Eligible"] += "NG = 1, "
+
+    # --- Rule 3: Reinvestment <= Promo2 ---
+    mask = df["reinvestment"] <= df["Promo2"]
+    df.loc[mask, ["eligible", "reinvestment"]] = [False, 0]
+    df.loc[mask, "Reason_Not_Eligible"] += "Reinvestment <= Promo2, "
 
     # --- Reinvestment range label ---
     df["Rango_Reinv"] = np.select(
@@ -109,8 +120,13 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
         default="NO APLICA",
     )
 
-    # --- Final eligibility filter ---
-    df.loc[df["Rango_Reinv"] == "NO APLICA", ["eligible", "reinvestment"]] = [False, 0]
+    # --- Rule 4: Rango_Reinv = NO APLICA ---
+    mask = df["Rango_Reinv"] == "NO APLICA"
+    df.loc[mask, ["eligible", "reinvestment"]] = [False, 0]
+    df.loc[mask, "Reason_Not_Eligible"] += "Rango_Reinv = NO APLICA, "
+
+    # --- Clean up reason text ---
+    df["Reason_Not_Eligible"] = df["Reason_Not_Eligible"].str.strip(", ").replace("", np.nan)
 
     df["reinvestment"] = df["reinvestment"].round(2)
     return df
