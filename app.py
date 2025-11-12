@@ -1,6 +1,6 @@
 ###############################################
 # 🎰 CASINO REINVESTMENT PROMOTION BUILDER
-# ✅ FINAL STREAMLIT APP (eligibility + country % + KPI % + pie charts)
+# ✅ FINAL STREAMLIT APP (eligibility + hostname exception + KPI % + pie charts)
 ###############################################
 
 import streamlit as st
@@ -51,7 +51,7 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     df.rename(columns=rename_map, inplace=True)
 
     required_cols = ["Gestion", "Pais", "NG", "TeoricoNeto", "WinTotalNeto",
-                     "Visitas", "Pot_Trip", "Pot_Visita", "Promo2", "Comps"]
+                     "Visitas", "Pot_Trip", "Pot_Visita", "Promo2", "Comps", "hostname"]
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
         st.error(f"❌ Missing required columns: {missing}")
@@ -108,8 +108,22 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
         default="NO APLICA",
     )
 
-    # --- Final eligibility filter ---
+    # --- If NO APLICA => eligible = 0 ---
     df.loc[df["Rango_Reinv"] == "NO APLICA", ["eligible", "reinvestment"]] = [False, 0]
+
+    # --- HOSTNAME EXCEPTION RULE ---
+    # If hostname ≠ none/enjoy punta del este and reinvestment == 0 → assign min for that country
+    def hostname_exception(row):
+        host = str(row.get("hostname", "")).strip().lower()
+        pais = str(row.get("Pais", "")).strip()
+        reinv = row.get("reinvestment", 0)
+        if host not in ["none", "enjoy punta del este"] and reinv == 0:
+            for key, rule in country_caps.items():
+                if normalize_gestion(key) == normalize_gestion(pais):
+                    return rule["min"]
+        return reinv
+
+    df["reinvestment"] = df.apply(hostname_exception, axis=1)
 
     df["reinvestment"] = df["reinvestment"].round(2)
     return df
@@ -166,23 +180,6 @@ if uploaded:
             # KPIs — Tables + % + Pie Charts
             ###############################################
             st.subheader("📊 KPI Summary")
-
-            eligible_df = df_result[df_result["eligible"]]
-            kpi_pais = eligible_df.groupby("Pais")["reinvestment"].sum().reset_index()
-            kpi_gestion = eligible_df.groupby("Gestion")["reinvestment"].sum().reset_index()
-
-            total_reinvestment = eligible_df["reinvestment"].sum()
-            avg_teo = eligible_df["TeoricoNeto"].sum()
-            avg_win = eligible_df["WinTotalNeto"].sum()
-            avg_trip = eligible_df["Pot_Trip"].sum()
-            avg_visita = eligible_df["Visitas"].mean()
-
-            c1, c2, c3, c4, c5 = st.columns(5)
-            c1.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
-            c2.metric("📈 Total Theoretical Net", f"{avg_teo:,.0f}")
-            c3.metric("🎯 Total Win Net", f"{avg_win:,.0f}")
-            c4.metric("🧳 Total Pot Trip", f"{avg_trip:,.0f}")
-            c5.metric("👣 Avg Visits", f"{avg_visita:,.2f}")
 
             eligible_df = df_result[df_result["eligible"]]
 
