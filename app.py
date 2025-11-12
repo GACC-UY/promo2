@@ -144,4 +144,42 @@ min_wallet = st.sidebar.number_input("Minimum reinvestment", 0.0, value=100.0)
 cap_value = st.sidebar.number_input("Cap per wallet", 0.0, value=20000.0)
 
 ###############################################
-# F
+# FILE UPLOAD
+###############################################
+st.subheader("📥 Upload CSV/XLSX")
+uploaded = st.file_uploader("Select File", type=["csv", "xlsx"])
+
+if uploaded:
+    try:
+        df_raw = pd.read_csv(uploaded) if uploaded.name.endswith(".csv") else pd.read_excel(uploaded)
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
+        st.stop()
+
+    df_raw.columns = [clean(c) for c in df_raw.columns]
+    st.success("✅ File loaded successfully")
+    st.write(df_raw.head())
+
+    if st.button("Generate Promotion Layout"):
+        df_result = apply_reinvestment(df_raw, pct_dict, min_wallet, cap_value, country_caps)
+        if df_result is not None:
+            st.success("✅ Promotion Layout Created")
+            st.dataframe(df_result)
+
+            st.subheader("📊 KPI Summary")
+            total_reinvestment = df_result["reinvestment"].sum()
+            avg_teo = df_result["TeoricoNeto"].mean()
+            avg_win = df_result["WinTotalNeto"].mean()
+
+            st.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
+            st.metric("📈 Avg Theoretical Net", f"{avg_teo:,.0f}")
+            st.metric("🎯 Avg Win Net", f"{avg_win:,.0f}")
+
+            # Export Excel safely
+            def to_excel(df):
+                out = BytesIO()
+                with pd.ExcelWriter(out, engine="xlsxwriter") as wr:
+                    df.to_excel(wr, index=False)
+                return out.getvalue()
+
+            st.download_button("⬇️ Download Excel", to_excel(df_result), "promotion_layout.xlsx")
