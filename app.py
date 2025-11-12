@@ -256,7 +256,7 @@ else:
             #############################
             # EXPORT
             #############################
-def to_excel(df):
+    def to_excel(df):
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine="xlsxwriter") as wr:
                     df.to_excel(wr, index=False)
