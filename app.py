@@ -1,18 +1,10 @@
-###############################################
-# ✅ FINAL APP.PY — WITH USER-DEFINED COUNTRY CAPS
-###############################################
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 from io import BytesIO
-import altair as alt
 import unicodedata
 import re
 
-###############################################
-# CONFIG
-###############################################
 st.set_page_config(page_title="Reinvestment Promotion Builder", layout="wide")
 st.title("🎰 Casino Reinvestment Promotion Builder")
 
@@ -27,12 +19,9 @@ def clean(col):
     col = re.sub(r"[^0-9A-Za-z_ ]", "", col)
     col = col.replace(" ", "_")
     col = re.sub(r"_+", "_", col)
-    return col.strip("_")
+    return col.strip("_").lower()  # lowercased for safety
 
 
-###############################################
-# GESTION NORMALIZER
-###############################################
 def normalize_gestion(val):
     if not isinstance(val, str):
         val = str(val)
@@ -40,110 +29,75 @@ def normalize_gestion(val):
     val = val.strip().replace(" ", "_").upper()
     return re.sub(r"[^0-9A-Za-z_]", "", val)
 
+###############################################
+# FLEXIBLE COLUMN RENAME (handles Excel quirks)
+###############################################
+def rename_columns(df):
+    cols = {c.lower(): c for c in df.columns}
+    mapping = {
+        "pot_xvisita": "Pot_Visita",
+        "prom_teoneto_trip": "TeoricoNeto",
+        "prom_winneto_trip": "WinTotalNeto",
+        "prom_visita_trip": "Visitas",
+        "pot_trip": "Pot_Trip",
+    }
+
+    for key, val in mapping.items():
+        if key in cols:
+            df.rename(columns={cols[key]: val}, inplace=True)
+    return df
 
 ###############################################
 # MAIN REINVESTMENT ENGINE
 ###############################################
 def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     df = df.copy()
+    df = rename_columns(df)
 
-    ###########################################
-    # RENAME REAL COLUMNS → INTERNAL NAMES
-    ###########################################
-    rename_map = {
-        "Pot_xVisita": "Pot_Visita",
-        "Prom_TeoNeto_Trip": "TeoricoNeto",
-        "Prom_WinNeto_Trip": "WinTotalNeto",
-        "Prom_Visita_Trip": "Visitas",
-        "Pot_Trip": "Pot_Trip",
-    }
-    df = df.rename(columns=rename_map)
-
-    ###########################################
-    # CREATE WxV (potencial per visit)
-    ###########################################
     if "Pot_Visita" in df.columns:
         df["WxV"] = pd.to_numeric(df["Pot_Visita"], errors="coerce").fillna(0)
     else:
         st.error("Column Pot_xVisita / Pot_Visita not found.")
         return None
 
-    ###########################################
-    # REQUIRED COLUMNS
-    ###########################################
-    required = [
-        "Gestion", "Pais", "NG",
-        "TeoricoNeto", "WinTotalNeto", "Visitas",
-        "Pot_Trip", "Pot_Visita",
-        "Promo2", "Comps"
-    ]
-
+    required = ["Gestion", "Pais", "NG", "TeoricoNeto", "WinTotalNeto", "Visitas", "Pot_Trip", "Pot_Visita", "Promo2", "Comps"]
     missing = [c for c in required if c not in df.columns]
     if missing:
         st.error(f"❌ Missing required columns: {missing}")
-        st.write("✅ Available columns:", list(df.columns))
+        st.write("Available:", list(df.columns))
         return None
 
-    ###########################################
-    # CLEAN NUMERIC COLUMNS
-    ###########################################
-    numeric_cols = [
-        "TeoricoNeto", "WinTotalNeto", "Visitas",
-        "Pot_Trip", "Pot_Visita", "WxV",
-        "Promo2", "Comps"
-    ]
-    for c in numeric_cols:
+    num_cols = ["TeoricoNeto", "WinTotalNeto", "Visitas", "Pot_Trip", "Pot_Visita", "WxV", "Promo2", "Comps"]
+    for c in num_cols:
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
 
-    ###########################################
-    # BASELINE KPIs
-    ###########################################
     df["Potencial"] = df[["TeoricoNeto", "WinTotalNeto"]].max(axis=1)
     df["GESTION_KEY"] = df["Gestion"].apply(normalize_gestion)
 
-    ###########################################
-    # SELECT POT BASED ON GESTION
-    ###########################################
     def choose_pot(row):
         if row["GESTION_KEY"] in ("URY_LOCAL", "URY_RESTO"):
             return row["Pot_Visita"]
         return row["Pot_Trip"]
 
     df["pot_used"] = df.apply(choose_pot, axis=1)
-
-    ###########################################
-    # PERCENTAGE MAPPING
-    ###########################################
     pct_norm = {normalize_gestion(k): v for k, v in pct_dict.items()}
     df["pct"] = df["GESTION_KEY"].map(pct_norm).fillna(0)
-
-    ###########################################
-    # INITIAL ELIGIBILITY (NG == 0)
-    ###########################################
     df["eligible"] = (pd.to_numeric(df["NG"], errors="coerce") == 0)
 
-    ###########################################
-    # RAW REINVESTMENT
-    ###########################################
     df["reinvestment_raw"] = df["pot_used"] * df["pct"]
     df["reinvestment"] = 0.0
 
     elig = df["eligible"]
-
     df.loc[elig, "reinvestment"] = df.loc[elig, "reinvestment_raw"]
     df.loc[elig & (df["reinvestment"] < min_wallet), "reinvestment"] = min_wallet
     df.loc[elig, "reinvestment"] = df.loc[elig, "reinvestment"].clip(upper=cap)
 
-    ###########################################
-    # INELIGIBLE CONDITIONS
-    ###########################################
+    # Ineligibility rules
     df.loc[df["Comps"] > 200, ["eligible", "reinvestment"]] = [False, 0]
     df.loc[df["reinvestment"] <= df["Promo2"], ["eligible", "reinvestment"]] = [False, 0]
     df.loc[df["reinvestment"] > df["WxV"], ["eligible", "reinvestment"]] = [False, 0]
 
-    ###########################################
-    # COUNTRY-SPECIFIC REINVESTMENT CAPS
-    ###########################################
+    # Apply country caps
     def apply_caps(row):
         pais = str(row.get("Pais", "")).strip()
         reinv = row.get("reinvestment", 0)
@@ -156,26 +110,19 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
 
     df["reinvestment"] = df.apply(apply_caps, axis=1)
 
-    ###########################################
-    # REINVESTMENT RANGE
-    ###########################################
-    conditions = [
-        df["reinvestment"] == 0,
-        df["reinvestment"] <= df["WxV"] * 0.5,
-        df["reinvestment"] <= df["WxV"]
-    ]
-    choices = ["NO APLICA", "<50%", "50-100%"]
-    df["Rango_Reinv"] = np.select(conditions, choices, default="NO APLICA")
+    df["Rango_Reinv"] = np.select(
+        [df["reinvestment"] == 0, df["reinvestment"] <= df["WxV"] * 0.5, df["reinvestment"] <= df["WxV"]],
+        ["NO APLICA", "<50%", "50-100%"],
+        default="NO APLICA"
+    )
 
     df["reinvestment"] = df["reinvestment"].round(2)
     return df
 
-
 ###############################################
-# SIDEBAR INPUTS
+# SIDEBAR CONFIG
 ###############################################
 st.sidebar.header("Percentages (%)")
-
 pct_dict = {
     "ARG": st.sidebar.number_input("ARG %", 0.0, 100.0, 10.0) / 100,
     "BRA": st.sidebar.number_input("BRA %", 0.0, 100.0, 15.0) / 100,
@@ -184,11 +131,7 @@ pct_dict = {
     "Otros": st.sidebar.number_input("Otros %", 0.0, 100.0, 5.0) / 100,
 }
 
-###############################################
-# USER-DEFINED COUNTRY CAPS
-###############################################
 st.sidebar.subheader("Country Reinvestment Caps")
-
 country_caps = {}
 for pais in ["URY Local", "URY Resto", "ARG", "BRA", "Otros"]:
     st.sidebar.markdown(f"**{pais}**")
@@ -196,84 +139,9 @@ for pais in ["URY Local", "URY Resto", "ARG", "BRA", "Otros"]:
     max_val = st.sidebar.number_input(f"{pais} Max", 0.0, 100000.0, 10000.0)
     country_caps[pais] = {"min": min_val, "max": max_val}
 
-###############################################
-# REINVESTMENT RULES
-###############################################
 st.sidebar.subheader("Reinvestment Rules")
 min_wallet = st.sidebar.number_input("Minimum reinvestment", 0.0, value=100.0)
 cap_value = st.sidebar.number_input("Cap per wallet", 0.0, value=20000.0)
 
 ###############################################
-# FILE UPLOAD
-###############################################
-st.subheader("📥 Upload CSV/XLSX")
-uploaded = st.file_uploader("Select File", type=["csv", "xlsx"])
-
-if uploaded:
-    df_raw = (
-        pd.read_csv(uploaded)
-        if uploaded.name.endswith(".csv")
-        else pd.read_excel(uploaded)
-    )
-    df_raw.columns = [clean(c) for c in df_raw.columns]
-
-    st.success("✅ File loaded")
-    st.write(df_raw.head())
-
-    if st.button("Generate Promotion Layout"):
-        df_result = apply_reinvestment(df_raw, pct_dict, min_wallet, cap_value, country_caps)
-
-        if df_result is not None:
-            st.success("✅ Promotion Layout Created")
-            st.dataframe(df_result, width='stretch')
-
-            ###########################################
-            # KPI SUMMARY
-            ###########################################
-            st.subheader("📊 KPI Summary")
-            total_reinvestment = df_result["reinvestment"].sum()
-            avg_teo = df_result["TeoricoNeto"].mean()
-            avg_win = df_result["WinTotalNeto"].mean()
-            avg_trip = df_result["Pot_Trip"].mean()
-            avg_visita = df_result["Visitas"].mean()
-
-            c1, c2, c3, c4, c5 = st.columns(5)
-            c1.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
-            c2.metric("📈 Avg Theoretical Net", f"{avg_teo:,.0f}")
-            c3.metric("🎯 Avg Win Net", f"{avg_win:,.0f}")
-            c4.metric("🧳 Avg Pot Trip", f"{avg_trip:,.0f}")
-            c5.metric("👣 Avg Visits", f"{avg_visita:,.2f}")
-
-            st.subheader("🌍 Reinvestment Breakdown")
-            with st.expander("📊 Summary KPIs"):
-                total_reinv = df_result["reinvestment"].sum()
-                total_eligible = int(df_result["eligible"].sum())
-
-                st.metric("Total Reinvestment (sum)", f"{total_reinv:,.2f}")
-                st.metric("Eligible Players", f"{total_eligible:,}")
-
-                st.subheader("Reinvestment by País")
-                kpi_pais = df_result.groupby("Pais")["reinvestment"].sum().reset_index()
-                st.dataframe(kpi_pais, width='stretch')
-
-                st.subheader("Reinvestment by Gestión")
-                kpi_gestion = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
-                st.dataframe(kpi_gestion, width='stretch')
-
-            st.subheader("📈 Additional KPIs")
-            df_result["Reinvestment_Rate"] = df_result["reinvestment"] / (df_result["TeoricoNeto"] + 1e-6)
-            avg_rate = df_result["Reinvestment_Rate"].mean() * 100
-            st.metric("Reinvestment Rate (%)", f"{avg_rate:.2f}%")
-
-            ###########################################
-            # EXPORT
-            ###########################################
-            def to_excel(df):
-                out = BytesIO()
-                with pd.ExcelWriter(out, engine="xlsxwriter") as wr:
-                    df.to_excel(wr, index=False)
-                return out.getvalue()
-
-            st.download_button("⬇️ Download Excel",
-                               to_excel(df_result),
-                               "promotion_layout.xlsx")
+# F
