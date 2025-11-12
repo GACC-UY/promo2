@@ -164,10 +164,9 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap):
 
 
 ###############################################
-# SIDEBAR INPUTS
+# SIDEBAR CONFIG
 ###############################################
 st.sidebar.header("Percentages (%)")
-
 pct_dict = {
     "ARG": st.sidebar.number_input("ARG %", 0.0, 100.0, 10.0) / 100,
     "BRA": st.sidebar.number_input("BRA %", 0.0, 100.0, 15.0) / 100,
@@ -175,6 +174,14 @@ pct_dict = {
     "URY Resto": st.sidebar.number_input("URY Resto %", 0.0, 100.0, 8.0) / 100,
     "Otros": st.sidebar.number_input("Otros %", 0.0, 100.0, 5.0) / 100,
 }
+
+st.sidebar.subheader("Country Reinvestment Caps")
+country_caps = {}
+for pais in ["URY Local", "URY Resto", "ARG", "BRA", "Otros"]:
+    st.sidebar.markdown(f"**{pais}**")
+    min_val = st.sidebar.number_input(f"{pais} Min", 0.0, 50000.0, 100.0 if "URY" in pais else 200.0)
+    max_val = st.sidebar.number_input(f"{pais} Max", 0.0, 100000.0, 10000.0)
+    country_caps[pais] = {"min": min_val, "max": max_val}
 
 st.sidebar.subheader("Reinvestment Rules")
 min_wallet = st.sidebar.number_input("Minimum reinvestment", 0.0, value=100.0)
