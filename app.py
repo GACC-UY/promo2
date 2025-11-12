@@ -171,6 +171,10 @@ if uploaded:
             # KPIs — Improved Tables with %
             ###############################################
             st.subheader("📊 KPI Summary")
+                        
+            eligible_df = df_result[df_result["eligible"]]
+            kpi_pais = eligible_df.groupby("Pais")["reinvestment"].sum().reset_index()
+            kpi_gestion = eligible_df.groupby("Gestion")["reinvestment"].sum().reset_index()
 
             df_result["Eligible_Flag"] = df_result["eligible"].astype(int)
             df_result["Potencial_xVisita"] = df_result["Pot_Visita"]
@@ -179,6 +183,22 @@ if uploaded:
             total_reinv = df_result["reinvestment"].sum()
             total_pot_visita = df_result["Potencial_xVisita"].sum()
             total_pot_trip = df_result["Potencial_xTrip"].sum()
+
+            avg_teo = eligible_df["TeoricoNeto"].sum()
+            avg_win = eligible_df["WinTotalNeto"].sum()
+            avg_trip = eligible_df["Pot_Trip"].sum()
+            avg_visita = eligible_df["Visitas"].mean()
+
+            c2.metric("📈 Total Theoretical Net", f"{avg_teo:,.0f}")
+            c3.metric("🎯 Total Win Net", f"{avg_win:,.0f}")
+            c4.metric("🧳 Total Pot Trip", f"{avg_trip:,.0f}")
+            c5.metric("👣 Avg Visits", f"{avg_visita:,.2f}")
+
+            
+            st.subheader("🌍 Reinvestment Breakdown (Eligible Only)")
+            st.dataframe(kpi_pais, use_container_width=True)
+            st.dataframe(kpi_gestion, use_container_width=True)
+
 
             # --- Overall Summary ---
             summary = pd.DataFrame({
