@@ -44,8 +44,75 @@ def normalize_gestion(val):
 ###############################################
 # MAIN REINVESTMENT ENGINE
 ###############################################
-def apply_reinvestment(df, pct_dict, min_wallet, cap):
+def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     df = df.copy()
+    df = rename_columns(df)
+
+    if "Pot_Visita" in df.columns:
+        df["WxV"] = pd.to_numeric(df["Pot_Visita"], errors="coerce").fillna(0)
+    else:
+        st.error("Column Pot_xVisita / Pot_Visita not found.")
+        return None
+
+    required = ["Gestion", "Pais", "NG", "TeoricoNeto", "WinTotalNeto", "Visitas", "Pot_Trip", "Pot_Visita", "Promo2", "Comps"]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        st.error(f"❌ Missing required columns: {missing}")
+        st.write("Available:", list(df.columns))
+        return None
+
+    num_cols = ["TeoricoNeto", "WinTotalNeto", "Visitas", "Pot_Trip", "Pot_Visita", "WxV", "Promo2", "Comps"]
+    for c in num_cols:
+        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+
+    df["Potencial"] = df[["TeoricoNeto", "WinTotalNeto"]].max(axis=1)
+    df["GESTION_KEY"] = df["Gestion"].apply(normalize_gestion)
+
+    def choose_pot(row):
+        if row["GESTION_KEY"] in ("URY_LOCAL", "URY_RESTO"):
+            return row["Pot_Visita"]
+        return row["Pot_Trip"]
+
+    df["pot_used"] = df.apply(choose_pot, axis=1)
+    pct_norm = {normalize_gestion(k): v for k, v in pct_dict.items()}
+    df["pct"] = df["GESTION_KEY"].map(pct_norm).fillna(0)
+    df["eligible"] = (pd.to_numeric(df["NG"], errors="coerce") == 0)
+
+    df["reinvestment_raw"] = df["pot_used"] * df["pct"]
+    df["reinvestment"] = 0.0
+
+    elig = df["eligible"]
+    df.loc[elig, "reinvestment"] = df.loc[elig, "reinvestment_raw"]
+    df.loc[elig & (df["reinvestment"] < min_wallet), "reinvestment"] = min_wallet
+    df.loc[elig, "reinvestment"] = df.loc[elig, "reinvestment"].clip(upper=cap)
+
+    # Ineligibility rules
+    df.loc[df["Comps"] > 200, ["eligible", "reinvestment"]] = [False, 0]
+    df.loc[df["reinvestment"] <= df["Promo2"], ["eligible", "reinvestment"]] = [False, 0]
+    df.loc[df["reinvestment"] > df["WxV"], ["eligible", "reinvestment"]] = [False, 0]
+
+    # Apply country caps
+    def apply_caps(row):
+        pais = str(row.get("Pais", "")).strip()
+        reinv = row.get("reinvestment", 0)
+        for key, rule in country_caps.items():
+            if key.replace(" ", "_").upper() == pais.replace(" ", "_").upper():
+                reinv = max(reinv, rule["min"])
+                reinv = min(reinv, rule["max"])
+                break
+        return reinv
+
+    df["reinvestment"] = df.apply(apply_caps, axis=1)
+
+    df["Rango_Reinv"] = np.select(
+        [df["reinvestment"] == 0, df["reinvestment"] <= df["WxV"] * 0.5, df["reinvestment"] <= df["WxV"]],
+        ["NO APLICA", "<50%", "50-100%"],
+        default="NO APLICA"
+    )
+
+    df["reinvestment"] = df["reinvestment"].round(2)
+    return df
+
 
     ###########################################
     # RENAME REAL COLUMNS → INTERNAL NAMES
