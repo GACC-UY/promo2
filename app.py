@@ -262,7 +262,7 @@ else:
                     df.to_excel(wr, index=False)
                 return out.getvalue()
 
-            st.download_button(
+    st.download_button(
                 "⬇️ Download Excel",
                 to_excel(df_result),
                 "promotion_layout.xlsx"
