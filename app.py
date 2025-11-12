@@ -292,6 +292,45 @@ if uploaded:
             st.dataframe(gest_summary, use_container_width=True)
 
             ###############################################
+            # CHARTS — PIE WITH %
+            ###############################################
+            st.subheader("📈 Reinvestment Distribution")
+
+            pais_summary["label"] = pais_summary.apply(
+                lambda x: f"{x['Pais']} ({x['%_Reinvestment']}%)", axis=1
+            )
+
+            st.altair_chart(
+                alt.Chart(pais_summary).mark_arc(outerRadius=150).encode(
+                    theta=alt.Theta(field="Total_Reinvestment", type="quantitative"),
+                    color=alt.Color(field="label", type="nominal"),
+                    tooltip=[
+                        alt.Tooltip("Pais:N"),
+                        alt.Tooltip("Total_Reinvestment:Q", format=",.0f"),
+                        alt.Tooltip("%_Reinvestment:Q", format=".2f")
+                    ]
+                ).properties(title="Reinvestment by Country (%)"),
+                use_container_width=True
+            )
+
+            gest_summary["label"] = gest_summary.apply(
+                lambda x: f"{x['Gestion']} ({x['%_Reinvestment']}%)", axis=1
+            )
+
+            st.altair_chart(
+                alt.Chart(gest_summary).mark_arc(outerRadius=150).encode(
+                    theta=alt.Theta(field="Total_Reinvestment", type="quantitative"),
+                    color=alt.Color(field="label", type="nominal"),
+                    tooltip=[
+                        alt.Tooltip("Gestion:N"),
+                        alt.Tooltip("Total_Reinvestment:Q", format=",.0f"),
+                        alt.Tooltip("%_Reinvestment:Q", format=".2f")
+                    ]
+                ).properties(title="Reinvestment by Gestión (%)"),
+                use_container_width=True
+            )
+            
+            ###############################################
             # EXPORT
             ###############################################
             def to_excel(df):
