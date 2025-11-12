@@ -208,12 +208,9 @@ if uploaded:
             st.success("✅ Promotion Layout Created")
             st.dataframe(df_result, use_container_width=True)
 
-            ###############################################
-            # KPIs — Improved Tables
-            ###############################################
-            st.subheader("📊 KPI Summary")
 
-                        ###############################################
+
+            ###############################################
             # 📊 KPI SECTION
             ###############################################
             st.subheader("📊 KPIs Summary")
@@ -223,16 +220,16 @@ if uploaded:
             kpi_gestion = eligible_df.groupby("Gestion")["reinvestment"].sum().reset_index()
 
             total_reinvestment = eligible_df["reinvestment"].sum()
-            avg_teo = eligible_df["TeoricoNeto"].mean()
-            avg_win = eligible_df["WinTotalNeto"].mean()
-            avg_trip = eligible_df["Pot_Trip"].mean()
+            avg_teo = eligible_df["TeoricoNeto"].sum()
+            avg_win = eligible_df["WinTotalNeto"].sum()
+            avg_trip = eligible_df["Pot_Trip"].sum()
             avg_visita = eligible_df["Visitas"].mean()
 
             c1, c2, c3, c4, c5 = st.columns(5)
             c1.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
-            c2.metric("📈 Avg Theoretical Net", f"{avg_teo:,.0f}")
-            c3.metric("🎯 Avg Win Net", f"{avg_win:,.0f}")
-            c4.metric("🧳 Avg Pot Trip", f"{avg_trip:,.0f}")
+            c2.metric("📈 Total Theoretical Net", f"{avg_teo:,.0f}")
+            c3.metric("🎯 Total Win Net", f"{avg_win:,.0f}")
+            c4.metric("🧳 Total Pot Trip", f"{avg_trip:,.0f}")
             c5.metric("👣 Avg Visits", f"{avg_visita:,.2f}")
 
             st.subheader("🌍 Reinvestment Breakdown (Eligible Only)")
