@@ -216,6 +216,21 @@ if uploaded:
                 kgest = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
                 st.dataframe(kgest)
 
+                total_reinvestment = df_result["reinvestment"].sum()
+            avg_teo = df_result["TeoricoNeto"].mean()
+            avg_win = df_result["WinTotalNeto"].mean()
+
+            st.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
+            st.metric("📈 Avg Theoretical Net", f"{avg_teo:,.0f}")
+            st.metric("🎯 Avg Win Net", f"{avg_win:,.0f}")
+
+            # Export Excel safely
+            def to_excel(df):
+                out = BytesIO()
+                with pd.ExcelWriter(out, engine="xlsxwriter") as wr:
+                    df.to_excel(wr, index=False)
+                return out.getvalue()
+
                 st.subheader("Pie Chart by País")
                 st.altair_chart(
                     alt.Chart(kpais).mark_arc().encode(
