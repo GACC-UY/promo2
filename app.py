@@ -204,35 +204,54 @@ if uploaded:
             st.success("✅ Promotion Layout Created")
             st.dataframe(df_result, use_container_width=True)
 
-            #############################
-            # KPIS
-            #############################
-            with st.expander("📊 KPIs"):
+            # ---------------------------------------------------------
+            # SUMMARY KPIs (EXPANDED)
+            # ---------------------------------------------------------
+            with st.expander("📊 Summary KPIs"):
+
+                total_reinv = df_result["reinvestment"].sum()
+                total_eligible = int(df_result["eligible"].sum())
+
+                st.metric("Total Reinvestment (sum)", f"{total_reinv:,.2f}")
+                st.metric("Eligible Players", f"{total_eligible:,}")
+
+                # Reinvestment per País
                 st.subheader("Reinvestment by País")
-                kpais = df_result.groupby("Pais")["reinvestment"].sum().reset_index()
-                st.dataframe(kpais)
+                kpi_pais = df_result.groupby("Pais")["reinvestment"].sum().reset_index()
+                st.dataframe(kpi_pais, width='stretch')
 
+                # Reinvestment per Gestion
                 st.subheader("Reinvestment by Gestión")
-                kgest = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
-                st.dataframe(kgest)
+                kpi_gestion = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
+                st.dataframe(kpi_gestion, width='stretch')
 
-                st.subheader("Pie Chart by País")
-                st.altair_chart(
-                    alt.Chart(kpais).mark_arc().encode(
-                        theta="reinvestment",
-                        color="Pais"
-                    ),
-                    use_container_width=True
+                # Additional KPIs
+                st.subheader("Additional KPIs")
+
+                df_result["Reinv_pct_Teorico"] = np.where(
+                    df_result["TeoricoNeto"] > 0,
+                    df_result["reinvestment"] / df_result["TeoricoNeto"],
+                    0
                 )
 
-                st.subheader("Pie Chart by Gestión")
-                st.altair_chart(
-                    alt.Chart(kgest).mark_arc().encode(
-                        theta="reinvestment",
-                        color="Gestion"
-                    ),
-                    use_container_width=True
+                df_result["Reinv_pct_Actual"] = np.where(
+                    df_result["WinTotalNeto"] > 0,
+                    df_result["reinvestment"] / df_result["WinTotalNeto"],
+                    0
                 )
+
+                extra_kpis = {
+                    "Avg Reinvestment % over Teórico": df_result["Reinv_pct_Teorico"].mean(),
+                    "Avg Reinvestment % over Actual": df_result["Reinv_pct_Actual"].mean(),
+                    "Avg Reinvestment per Visit": (df_result["reinvestment"] / df_result["Visitas"].replace(0, np.nan)).mean(),
+                    "Eligibility Rate (%)": df_result["eligible"].mean() * 100,
+                    "Excluded Players (NG or >100%)": len(df_result) - df_result["eligible"].sum(),
+                    "Average WxV": df_result["WxV"].mean(),
+                    "Average Potencial": df_result["Potencial"].mean(),
+                    "Average Trip Win": df_result["Trip_Esperado"].mean(),
+                }
+
+                st.json(extra_kpis)
 
             #############################
             # EXPORT
