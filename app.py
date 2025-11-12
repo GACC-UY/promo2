@@ -1,6 +1,6 @@
 ###############################################
 # 🎰 CASINO REINVESTMENT PROMOTION BUILDER
-# ✅ FINAL STREAMLIT APP (eligibility hard rule: 0 reinvestment)
+# ✅ FINAL STREAMLIT APP (eligibility + Rango rule)
 ###############################################
 
 import streamlit as st
@@ -154,6 +154,11 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
         ["NO APLICA", "<50%", "50-100%"],
         default="NO APLICA",
     )
+
+    ###############################################
+    # ✅ NEW RULE: If Rango_Reinv == 'NO APLICA' → eligible = 0
+    ###############################################
+    df.loc[df["Rango_Reinv"] == "NO APLICA", ["eligible", "reinvestment"]] = [False, 0]
 
     df["reinvestment"] = df["reinvestment"].round(2)
     return df
