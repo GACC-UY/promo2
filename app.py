@@ -31,16 +31,6 @@ def clean(col):
     return col.strip("_")
 
 
-###############################################
-# NORMALIZE GESTION / PAIS KEYS
-###############################################
-def normalize_gestion(val):
-    if not isinstance(val, str):
-        val = str(val)
-    val = "".join(c for c in unicodedata.normalize("NFKD", val) if not unicodedata.combining(c))
-    val = val.strip().replace(" ", "_").upper()
-    return re.sub(r"[^0-9A-Za-z_]", "", val)
-
 
 ###############################################
 # 🧠 MAIN REINVESTMENT ENGINE
