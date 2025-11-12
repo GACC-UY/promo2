@@ -223,20 +223,6 @@ if uploaded:
 
             st.subheader("🌍 Reinvestment Breakdown")
 
-            import plotly.express as px
-            if "Pais" in df_result.columns:
-                reinv_pais = df_result.groupby("Pais")["reinvestment"].sum().reset_index()
-                st.write(reinv_pais)
-                fig1 = px.pie(reinv_pais, names="Pais", values="reinvestment",
-                              title="Reinvestment by Country", hole=0.4)
-                st.plotly_chart(fig1, width='stretch')
-
-            if "Gestion" in df_result.columns:
-                reinv_gest = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
-                st.write(reinv_gest)
-                fig2 = px.pie(reinv_gest, names="Gestion", values="reinvestment",
-                              title="Reinvestment by Gestion", hole=0.4)
-                st.plotly_chart(fig2, width='stretch')
 
             st.subheader("📈 Additional KPIs")
             df_result["Reinvestment_Rate"] = df_result["reinvestment"] / (df_result["TeoricoNeto"] + 1e-6)
