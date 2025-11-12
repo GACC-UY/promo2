@@ -77,9 +77,6 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     df["Potencial"] = df[["TeoricoNeto", "WinTotalNeto"]].max(axis=1)
     df["GESTION_KEY"] = df["Gestion"].apply(normalize_gestion)
 
-    # --- Choose correct pot based on GESTION ---
-    df["pot_used"] = np.where(df["GESTION_KEY"].isin(["URY_LOCAL", "URY_RESTO"]),
-                              df["Pot_Visita"], df["Pot_Trip"])
 
     # --- Map percentage per country ---
     pct_norm = {normalize_gestion(k): v for k, v in pct_dict.items()}
@@ -89,7 +86,7 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     df["eligible"] = (pd.to_numeric(df["NG"], errors="coerce") == 0)
 
     # --- Calculate reinvestment raw ---
-    df["reinvestment_raw"] = df["pot_used"] * df["pct"]
+    df["reinvestment_raw"] = df["Pot_Visita"] * df["pct"]
 
     # --- Apply global min/cap ---
     elig = df["eligible"]
