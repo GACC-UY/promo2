@@ -1,3 +1,172 @@
+###############################################
+# 🎰 CASINO REINVESTMENT PROMOTION BUILDER
+# ✅ FINAL STREAMLIT APP (per-country caps + % KPIs + % Pie Charts)
+###############################################
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+from io import BytesIO
+import altair as alt
+import unicodedata
+import re
+
+###############################################
+# CONFIG
+###############################################
+st.set_page_config(page_title="Reinvestment Promotion Builder", layout="wide")
+st.title("🎰 Casino Reinvestment Promotion Builder")
+
+###############################################
+# HELPERS
+###############################################
+def clean(col):
+    """Normalize column names"""
+    if not isinstance(col, str):
+        col = str(col)
+    col = col.strip()
+    col = "".join(c for c in unicodedata.normalize("NFKD", col) if not unicodedata.combining(c))
+    col = re.sub(r"[^0-9A-Za-z_ ]", "", col)
+    col = col.replace(" ", "_")
+    col = re.sub(r"_+", "_", col)
+    return col.strip("_")
+
+def normalize_gestion(name):
+    return str(name).strip().lower().replace("_", "").replace(" ", "")
+
+###############################################
+# 🧠 MAIN REINVESTMENT ENGINE
+###############################################
+def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
+    df = df.copy()
+
+    # --- Standardize column names ---
+    rename_map = {
+        "Pot_xVisita": "Pot_Visita",
+        "Prom_TeoNeto_Trip": "TeoricoNeto",
+        "Prom_WinNeto_Trip": "WinTotalNeto",
+        "Prom_Visita_Trip": "Visitas",
+        "Pot_Trip": "Pot_Trip",
+    }
+    df.rename(columns=rename_map, inplace=True)
+
+    # --- Validate required columns ---
+    required_cols = ["Gestion", "Pais", "NG", "TeoricoNeto", "WinTotalNeto",
+                     "Visitas", "Pot_Trip", "Pot_Visita", "Promo2", "Comps"]
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        st.error(f"❌ Missing required columns: {missing}")
+        return None
+
+    # --- Convert numerics safely ---
+    num_cols = ["TeoricoNeto", "WinTotalNeto", "Visitas", "Pot_Trip",
+                "Pot_Visita", "Promo2", "Comps"]
+    for c in num_cols:
+        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+
+    # --- Derived fields ---
+    df["WxV"] = df["Pot_Visita"]
+    df["Potencial"] = df[["TeoricoNeto", "WinTotalNeto"]].max(axis=1)
+
+    # --- Normalize pct per country ---
+    pct_norm = {normalize_gestion(k): v for k, v in pct_dict.items()}
+    df["pct"] = df["Pais"].apply(lambda x: pct_norm.get(normalize_gestion(x), 0))
+
+    # --- Eligibility base ---
+    df["eligible"] = (pd.to_numeric(df["NG"], errors="coerce") == 0)
+
+    # --- Raw reinvestment ---
+    df["reinvestment_raw"] = df["Pot_Visita"] * df["pct"]
+
+    # --- Apply country caps ---
+    def apply_country_caps(row):
+        pais = str(row.get("Pais", "")).strip()
+        reinv = row.get("reinvestment_raw", 0)
+        for key, rule in country_caps.items():
+            if normalize_gestion(key) == normalize_gestion(pais):
+                reinv = max(reinv, rule["min"])
+                reinv = min(reinv, rule["max"])
+                break
+        return reinv
+
+    df["reinvestment"] = df.apply(apply_country_caps, axis=1)
+
+    # --- Apply global limits ---
+    elig = df["eligible"]
+    df.loc[elig, "reinvestment"] = df.loc[elig, "reinvestment"].clip(lower=min_wallet, upper=cap)
+    df.loc[~elig, "reinvestment"] = 0
+
+    # --- Eligibility refinement ---
+    df.loc[df["Comps"] > 200, ["eligible", "reinvestment"]] = [False, 0]
+    df.loc[df["reinvestment"] <= df["Promo2"], ["eligible", "reinvestment"]] = [False, 0]
+
+    # --- Reinvestment range label ---
+    df["Rango_Reinv"] = np.select(
+        [
+            df["reinvestment"] == 0,
+            df["reinvestment"] <= df["WxV"] * 0.5,
+            df["reinvestment"] <= df["WxV"],
+        ],
+        ["NO APLICA", "<50%", "50-100%"],
+        default="NO APLICA",
+    )
+
+    # --- If NO APLICA => eligible = 0 ---
+    df.loc[df["Rango_Reinv"] == "NO APLICA", "eligible"] = False
+
+    df["reinvestment"] = df["reinvestment"].round(2)
+    return df
+
+
+###############################################
+# SIDEBAR CONFIG
+###############################################
+st.sidebar.header("Percentages (%)")
+pct_dict = {
+    "ARG": st.sidebar.number_input("ARG %", 0.0, 100.0, 10.0) / 100,
+    "BRA": st.sidebar.number_input("BRA %", 0.0, 100.0, 15.0) / 100,
+    "URY Local": st.sidebar.number_input("URY Local %", 0.0, 100.0, 8.0) / 100,
+    "URY Resto": st.sidebar.number_input("URY Resto %", 0.0, 100.0, 8.0) / 100,
+    "Otros": st.sidebar.number_input("Otros %", 0.0, 100.0, 5.0) / 100,
+}
+
+st.sidebar.subheader("Country Reinvestment Caps")
+country_caps = {}
+for pais in ["URY Local", "URY Resto", "ARG", "BRA", "Otros"]:
+    st.sidebar.markdown(f"**{pais}**")
+    min_val = st.sidebar.number_input(f"{pais} Min", 0.0, 50000.0, 100.0 if "URY" in pais else 200.0)
+    max_val = st.sidebar.number_input(f"{pais} Max", 0.0, 100000.0, 10000.0)
+    country_caps[pais] = {"min": min_val, "max": max_val}
+
+st.sidebar.subheader("Global Reinvestment Rules")
+min_wallet = st.sidebar.number_input("Minimum reinvestment", 0.0, value=100.0)
+cap_value = st.sidebar.number_input("Cap per wallet", 0.0, value=20000.0)
+
+
+###############################################
+# FILE UPLOAD
+###############################################
+st.subheader("📥 Upload CSV/XLSX")
+uploaded = st.file_uploader("Select File", type=["csv", "xlsx"])
+
+if uploaded:
+    df_raw = (
+        pd.read_csv(uploaded)
+        if uploaded.name.endswith(".csv")
+        else pd.read_excel(uploaded)
+    )
+    df_raw.columns = [clean(c) for c in df_raw.columns]
+
+    st.success("✅ File loaded successfully!")
+    st.write(df_raw.head())
+
+    if st.button("🚀 Generate Promotion Layout"):
+        df_result = apply_reinvestment(df_raw, pct_dict, min_wallet, cap_value, country_caps)
+
+        if df_result is not None:
+            st.success("✅ Promotion Layout Created")
+            st.dataframe(df_result, use_container_width=True)
+
             ###############################################
             # KPIs — Improved Tables with %
             ###############################################
