@@ -42,9 +42,6 @@ def normalize_gestion(val):
     return re.sub(r"[^0-9A-Za-z_]", "", val)
 
 
-###############################################
-# 🧠 CLEAN + OPTIMIZED REINVESTMENT ENGINE
-###############################################
 def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     df = df.copy()
 
@@ -72,56 +69,66 @@ def apply_reinvestment(df, pct_dict, min_wallet, cap, country_caps):
     for c in num_cols:
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
 
-    # --- Derived metrics ---
-    df["WxV"] = pd.to_numeric(df.get("Pot_Visita", 0), errors="coerce").fillna(0)
-    df["Potencial"] = df[["TeoricoNeto", "WinTotalNeto"]].max(axis=1)
+    # --- Normalize gestion / pais ---
     df["GESTION_KEY"] = df["Gestion"].apply(normalize_gestion)
+    df["PAIS_KEY"] = df["Pais"].apply(normalize_gestion)
 
-    # --- Choose correct pot by Gestión ---
+    # --- Choose correct potential base ---
     df["pot_used"] = np.where(df["GESTION_KEY"].isin(["URY_LOCAL", "URY_RESTO"]),
                               df["Pot_Visita"], df["Pot_Trip"])
 
-    # --- Map percentage by Gestión ---
+    # --- Map % per gestión ---
     pct_norm = {normalize_gestion(k): v for k, v in pct_dict.items()}
     df["pct"] = df["GESTION_KEY"].map(pct_norm).fillna(0)
 
     # --- Eligibility ---
     df["eligible"] = (pd.to_numeric(df["NG"], errors="coerce") == 0)
 
-    # --- Calculate reinvestment ---
-    df["reinvestment_raw"] = df["pot_used"] * df["pct"]
+    # --- Initialize reinvestment ---
     df["reinvestment"] = 0.0
 
-    # --- Apply global min/cap ---
-    elig = df["eligible"]
-    df.loc[elig, "reinvestment"] = df.loc[elig, "reinvestment_raw"]
-    df.loc[elig & (df["reinvestment"] < min_wallet), "reinvestment"] = min_wallet
-    df.loc[elig, "reinvestment"] = df.loc[elig, "reinvestment"].clip(upper=cap)
+    # --- Core reinvestment logic ---
+    for i, row in df.iterrows():
+        if not row["eligible"]:
+            df.at[i, "reinvestment"] = 0
+            continue
 
-    # --- Ineligibility rules ---
-    df.loc[df["Comps"] > 200, ["eligible", "reinvestment"]] = [False, 0]
-    df.loc[df["reinvestment"] <= df["Promo2"], ["eligible", "reinvestment"]] = [False, 0]
-    df.loc[df["reinvestment"] > df["WxV"], ["eligible", "reinvestment"]] = [False, 0]
+        pais_key = normalize_gestion(row["Pais"])
+        reinv = row["pot_used"] * row["pct"]
 
-    # --- Apply per-country min/max caps ---
-    def apply_country_caps(row):
-        pais = str(row.get("Pais", "")).strip()
-        reinv = row.get("reinvestment", 0)
-        for key, rule in country_caps.items():
-            if normalize_gestion(key) == normalize_gestion(pais):
-                reinv = max(reinv, rule["min"])
-                reinv = min(reinv, rule["max"])
-                break
-        return reinv
+        # must offer more than promo2
+        if reinv <= row["Promo2"]:
+            reinv = 0
+        else:
+            # Apply per-country caps
+            for key, rule in country_caps.items():
+                if normalize_gestion(key) == pais_key:
+                    reinv = max(reinv, rule["min"])
+                    reinv = min(reinv, rule["max"])
+                    break
 
-    df["reinvestment"] = df.apply(apply_country_caps, axis=1)
+            # Apply global min and max cap
+            reinv = max(reinv, min_wallet)
+            reinv = min(reinv, cap)
+
+            # Cannot exceed WxV
+            if "Pot_Visita" in row:
+                wxv = pd.to_numeric(row["Pot_Visita"], errors="coerce") or 0
+                if reinv > wxv:
+                    reinv = 0
+
+            # If comps too high, no reinvestment
+            if row["Comps"] > 200:
+                reinv = 0
+
+        df.at[i, "reinvestment"] = reinv
 
     # --- Label reinvestment range ---
     df["Rango_Reinv"] = np.select(
         [
             df["reinvestment"] == 0,
-            df["reinvestment"] <= df["WxV"] * 0.5,
-            df["reinvestment"] <= df["WxV"],
+            df["reinvestment"] <= df["Pot_Visita"] * 0.5,
+            df["reinvestment"] <= df["Pot_Visita"],
         ],
         ["NO APLICA", "<50%", "50-100%"],
         default="NO APLICA",
