@@ -204,9 +204,7 @@ if uploaded:
         st.success("✅ Promotion Layout Created")
         st.dataframe(df_result, width='stretch')
 
-        #############################
         # === KPI SUMMARY ===
-        #############################
         if not df_result.empty:
             st.subheader("📊 KPI Summary")
 
@@ -216,63 +214,43 @@ if uploaded:
             avg_trip = df_result["Pot_Trip"].mean()
             avg_visita = df_result["Visitas"].mean()
 
-            col1, col2, col3, col4, col5 = st.columns(5)
-            col1.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
-            col2.metric("📈 Avg Theoretical Net (Trip)", f"{avg_teo:,.0f}")
-            col3.metric("🎯 Avg Win Net (Trip)", f"{avg_win:,.0f}")
-            col4.metric("🧳 Avg Pot Trip", f"{avg_trip:,.0f}")
-            col5.metric("👣 Avg Visits (Trip)", f"{avg_visita:,.2f}")
+            c1, c2, c3, c4, c5 = st.columns(5)
+            c1.metric("💰 Total Reinvestment", f"{total_reinvestment:,.0f}")
+            c2.metric("📈 Avg Theoretical Net", f"{avg_teo:,.0f}")
+            c3.metric("🎯 Avg Win Net", f"{avg_win:,.0f}")
+            c4.metric("🧳 Avg Pot Trip", f"{avg_trip:,.0f}")
+            c5.metric("👣 Avg Visits", f"{avg_visita:,.2f}")
 
-            #############################
-            # AGGREGATED KPIs
-            #############################
             st.subheader("🌍 Reinvestment Breakdown")
 
             import plotly.express as px
-
             if "Pais" in df_result.columns:
-                reinv_by_pais = df_result.groupby("Pais")["reinvestment"].sum().reset_index()
-                st.write(reinv_by_pais)
-                fig_pais = px.pie(
-                    reinv_by_pais,
-                    names="Pais",
-                    values="reinvestment",
-                    title="Reinvestment by Country",
-                    hole=0.4
-                )
-                st.plotly_chart(fig_pais, width='stretch')
+                reinv_pais = df_result.groupby("Pais")["reinvestment"].sum().reset_index()
+                st.write(reinv_pais)
+                fig1 = px.pie(reinv_pais, names="Pais", values="reinvestment",
+                              title="Reinvestment by Country", hole=0.4)
+                st.plotly_chart(fig1, width='stretch')
 
             if "Gestion" in df_result.columns:
-                reinv_by_gestion = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
-                st.write(reinv_by_gestion)
-                fig_gestion = px.pie(
-                    reinv_by_gestion,
-                    names="Gestion",
-                    values="reinvestment",
-                    title="Reinvestment by Gestion",
-                    hole=0.4
-                )
-                st.plotly_chart(fig_gestion, width='stretch')
+                reinv_gest = df_result.groupby("Gestion")["reinvestment"].sum().reset_index()
+                st.write(reinv_gest)
+                fig2 = px.pie(reinv_gest, names="Gestion", values="reinvestment",
+                              title="Reinvestment by Gestion", hole=0.4)
+                st.plotly_chart(fig2, width='stretch')
 
-            #############################
-            # ADDITIONAL KPIs
-            #############################
             st.subheader("📈 Additional KPIs")
             df_result["Reinvestment_Rate"] = df_result["reinvestment"] / (df_result["TeoricoNeto"] + 1e-6)
-            avg_reinv_rate = df_result["Reinvestment_Rate"].mean() * 100
-            st.metric("Reinvestment Rate (%)", f"{avg_reinv_rate:.2f}%")
+            avg_rate = df_result["Reinvestment_Rate"].mean() * 100
+            st.metric("Reinvestment Rate (%)", f"{avg_rate:.2f}%")
 
-            #############################
             # EXPORT
-            #############################
             def to_excel(df):
                 out = BytesIO()
                 with pd.ExcelWriter(out, engine="xlsxwriter") as wr:
                     df.to_excel(wr, index=False)
                 return out.getvalue()
 
-            st.download_button(
-                "⬇️ Download Excel",
-                to_excel(df_result),
-                "promotion_layout.xlsx"
-            )
+            st.download_button("⬇️ Download Excel",
+                               to_excel(df_result),
+                               "promotion_layout.xlsx")
+
